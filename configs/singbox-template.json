@@ -1,0 +1,110 @@
+{
+  "_comment": [
+    "juzheng 默认 sing-box 配置模板。",
+    "流量架构：",
+    "  Claude Code → TUN(tun-in) → route[inbound=tun-in + anthropic] → go-mitmproxy:9080(解密)",
+    "           → go-mitmproxy upstream → mixed(mixed-back:1081) → route[inbound=mixed-back] → 节点 outbound → 出网",
+    "  其余流量 → TUN(tun-in) → 节点 outbound 直出，不解密。",
+    "",
+    "使用前必改：",
+    "  1. outbounds[proxy-node] 替换为你的真实节点（vmess/trojan/ss/hysteria2 等）。",
+    "  2. TUN 的 auto_route 需要 root 权限（由 privileged helper 提供）。",
+    "  3. MITM_DOMAINS 按需增减（默认只解密 anthropic）。",
+    "",
+    "端口约定：",
+    "  9080 = go-mitmproxy（MITM 解密，由 juzheng MitmProxyService 管理，此处仅作 outbound 目标）",
+    "  1081 = mixed-back（MITM 解密后回注入口）",
+    "  9090 = sing-box Clash API（可选，供调试/节点切换）"
+  ],
+  "log": {
+    "level": "info",
+    "timestamp": true
+  },
+  "dns": {
+    "servers": [
+      { "tag": "cloudflare", "address": "https://1.1.1.1/dns-query", "detour": "proxy-node" },
+      { "tag": "local", "address": "223.5.5.5", "detour": "direct" }
+    ],
+    "rules": [
+      { "outbound": "any", "server": "local" }
+    ],
+    "strategy": "ipv4_only"
+  },
+  "inbounds": [
+    {
+      "type": "tun",
+      "tag": "tun-in",
+      "address": ["172.18.0.1/30"],
+      "mtu": 1500,
+      "auto_route": true,
+      "strict_route": true,
+      "stack": "system",
+      "sniff": true
+    },
+    {
+      "type": "mixed",
+      "tag": "mixed-back",
+      "listen": "127.0.0.1",
+      "listen_port": 1081,
+      "sniff": true
+    }
+  ],
+  "outbounds": [
+    {
+      "_comment": "【必改】替换为你的真实代理节点。此处为占位 direct，实际使用时填 vmess/trojan/hysteria2 等。",
+      "type": "direct",
+      "tag": "proxy-node"
+    },
+    { "type": "direct", "tag": "direct" },
+    { "type": "block", "tag": "block" },
+    {
+      "_comment": "把需解密的流量以 HTTP CONNECT 发给 go-mitmproxy。",
+      "type": "http",
+      "tag": "to-mitmproxy",
+      "server": "127.0.0.1",
+      "server_port": 9080
+    },
+    {
+      "_comment": "DNS 出站走代理节点，避免 DNS 泄露。",
+      "type": "dns",
+      "tag": "dns-out"
+    }
+  ],
+  "route": {
+    "rules": [
+      {
+        "_comment": "回环打破：mixed-back 回注的流量（含已解密的 anthropic）直接走节点，不再进 MITM。",
+        "inbound": ["mixed-back"],
+        "outbound": "proxy-node"
+      },
+      {
+        "_comment": "TUN 进来的、需解密的域名 → 发给 go-mitmproxy。",
+        "inbound": ["tun-in"],
+        "domain_suffix": [
+          "anthropic.com",
+          "claude.com"
+        ],
+        "outbound": "to-mitmproxy"
+      },
+      {
+        "_comment": "DNS 查询走 dns-out。",
+        "protocol": "dns",
+        "outbound": "dns-out"
+      },
+      {
+        "_comment": "国内直连（按需扩展 geosite 规则）。",
+        "geosite": ["cn", "private"],
+        "geoip": ["cn", "private"],
+        "outbound": "direct"
+      }
+    ],
+    "final": "proxy-node",
+    "auto_detect_interface": true
+  },
+  "experimental": {
+    "cache_file": { "enabled": true },
+    "clash_api": {
+      "external_controller": "127.0.0.1:9090"
+    }
+  }
+}

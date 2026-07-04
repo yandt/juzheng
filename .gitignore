@@ -1,0 +1,31 @@
+.task
+bin
+frontend/dist
+frontend/node_modules
+
+# POC 运行时生成的 CA 证书（含私钥，勿提交）
+.poc-ca/
+poc/juzheng-poc
+
+# 运行时生成的 CA 证书目录
+**/ca/mitmproxy-ca-cert.*
+
+# helper 构建产物（59MB 二进制，由 task build:helper 生成，勿提交）
+helper-assets/juzheng-helper
+
+# Wails 自动生成的绑定（由 wails3 generate bindings 产出）
+frontend/bindings/
+
+# 前端 lockfile 由 package-lock.json 或 pnpm-lock 生成，按需保留；这里忽略避免冲突
+frontend/package-lock.json
+
+build/linux/appimage/build
+build/windows/nsis/MicrosoftEdgeWebview2Setup.exe
+# Mobile generated (per-machine; overlays hold absolute paths)
+build/ios/xcode/overlay.json
+build/ios/xcode/gen/
+build/android/overlay.json
+build/android/gen/
+
+# 运行时生成的用户配置（含节点信息，勿提交）
+configs/*.local.json
