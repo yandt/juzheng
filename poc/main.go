@@ -39,7 +39,7 @@ func (a *captureAddon) Response(f *proxy.Flow) {
 	log.Printf("⬅️  RESP %d  body=%d bytes", f.Response.StatusCode, len(f.Response.Body))
 }
 
-// SSE hook —— 这是 Claude 流式响应的关键
+// SSE hook —— 捕获流式响应（SSE）的关键
 func (a *captureAddon) SSEStart(f *proxy.Flow) {
 	log.Printf("🔴 SSE 流开始: %s", f.Request.URL.String())
 }

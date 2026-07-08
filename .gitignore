@@ -29,3 +29,7 @@ build/android/gen/
 
 # 运行时生成的用户配置（含节点信息，勿提交）
 configs/*.local.json
+.gstack/
+
+# 根目录 go build 临时产物（正式产物在 bin/）
+/juzheng
