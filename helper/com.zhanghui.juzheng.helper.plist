@@ -16,6 +16,13 @@
     <key>UserName</key>
     <string>root</string>
 
+    <!-- helper 只接受此 UID（安装用户）的 IPC 连接；安装时由主 app 注入实际 UID -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>JUZHENG_ALLOWED_UID</key>
+        <string>__ALLOWED_UID__</string>
+    </dict>
+
     <!-- 开机/加载时立即启动 -->
     <key>RunAtLoad</key>
     <true/>

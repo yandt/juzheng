@@ -1,0 +1,32 @@
+/* 主题桥接：让本应用自定义样式复用 Element Plus 的 CSS 变量，随 <html> 的 .dark/.light 自动切换。
+   本文件在 main.ts 中于 Element Plus 样式（含 dark/css-vars.css）之后导入，
+   因此此处对 --el-* 的深色覆盖优先级足够、能生效。 */
+
+/* 语义别名 --jz-* → 映射到 Element Plus 变量（浅色/深色两套均由 EP 提供并随主题切换） */
+:root {
+  --jz-bg: var(--el-bg-color-page);       /* 页面背景 */
+  --jz-surface: var(--el-bg-color);        /* 卡片/行/输入 背景 */
+  --jz-surface-2: var(--el-fill-color-light); /* 侧栏/标题栏 背景 */
+  --jz-border: var(--el-border-color);
+  --jz-border-hover: var(--el-border-color-hover);
+  --jz-text: var(--el-text-color-primary);
+  --jz-text-dim: var(--el-text-color-secondary);
+}
+
+/* 深色下把 EP 调色板覆盖为本应用原有的偏蓝深色（保持观感）；浅色沿用 EP 默认（干净白/浅灰）。 */
+html.dark {
+  --el-bg-color: #1a1c22;
+  --el-bg-color-page: #16181e;
+  --el-bg-color-overlay: #1a1c22;
+  --el-fill-color-light: #14161c;
+  --el-fill-color: #1d2027;
+  --el-fill-color-lighter: #16181e;
+  --el-fill-color-blank: #1a1c22;
+  --el-border-color: #2a2d36;
+  --el-border-color-light: #2a2d36;
+  --el-border-color-lighter: #22242b;
+  --el-border-color-hover: #3a3d46;
+  --el-text-color-primary: #e6e6e6;
+  --el-text-color-regular: #cfd3dc;
+  --el-text-color-secondary: #9ca3af;
+}
