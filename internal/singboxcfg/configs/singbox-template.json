@@ -9,7 +9,7 @@
     "使用前必改：",
     "  1. outbounds[proxy-node] 替换为你的真实节点（vmess/trojan/ss/hysteria2 等）。",
     "  2. TUN 的 auto_route 需要 root 权限（由 privileged helper 提供）。",
-    "  3. MITM_DOMAINS 按需增减（默认只解密 anthropic）。",
+    "  3. 明文抓包域名默认空，由用户在「明文抓包」里按需配置。",
     "",
     "端口约定：",
     "  9080 = go-mitmproxy（MITM 解密，由 juzheng MitmProxyService 管理，此处仅作 outbound 目标）",
@@ -91,14 +91,11 @@
         "outbound": "proxy-node"
       },
       {
-        "_comment": "TUN 进来的、需解密的域名 → 发给 go-mitmproxy。",
+        "_comment": "TUN 进来的、需解密(明文抓包)的域名 → 发给 go-mitmproxy。默认空，由用户在「明文抓包」里配置。",
         "inbound": [
           "tun-in"
         ],
-        "domain_suffix": [
-          "anthropic.com",
-          "claude.com"
-        ],
+        "domain_suffix": [],
         "outbound": "to-mitmproxy"
       },
       {

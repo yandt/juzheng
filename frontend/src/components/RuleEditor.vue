@@ -20,16 +20,21 @@ const matchTypeOptions = computed<{ value: RuleMatchType; label: string }[]>(() 
   { value: 'domain', label: t('comp.matchDomain') },
   { value: 'domain_regex', label: t('comp.matchDomainRegex') },
   { value: 'ip_cidr', label: t('comp.matchIpCidr') },
-  { value: 'geosite', label: t('comp.matchGeosite') },
-  { value: 'geoip', label: t('comp.matchGeoip') },
+  // 注意：geosite/geoip 在 sing-box 1.12+ 已移除内置数据库，会被 sanitize 整条丢弃 → 规则静默失效（漏抓）。
+  // 故不再作为可选匹配类型。按地区分流请改用 rule_set。
   { value: 'protocol', label: t('comp.matchProtocol') },
 ])
 
 // textarea 文本镜像（每条规则一个，values.join('\n')）
 const ruleTexts = ref<string[]>([])
 
-// 同步外部 modelValue → ruleTexts（弹窗打开/数据变化时）
+// 标记：本组件自己发出的 modelValue 更新，不回灌 ruleTexts。
+// 否则输入时 values 经 filter(Boolean) 去掉空行后 join('\n') 会把刚敲的换行/空行抹掉，导致「打不出回车」。
+let selfUpdate = false
+
+// 同步外部 modelValue → ruleTexts（仅弹窗打开/外部数据变化时；自身编辑产生的更新跳过，保留原始文本含换行/空行）
 watch(() => props.modelValue, (rules) => {
+  if (selfUpdate) { selfUpdate = false; return }
   ruleTexts.value = (rules ?? []).map(r => r.values.join('\n'))
 }, { immediate: true })
 
@@ -48,6 +53,7 @@ function addRule() {
   const nextType = matchTypeOptions.value.find(o => !usedTypes.value.has(o.value))?.value ?? 'domain_suffix'
   const newRules = [...(props.modelValue ?? []), { matchType: nextType, values: [] as string[] }]
   ruleTexts.value.push('')
+  selfUpdate = true
   emit('update:modelValue', newRules)
 }
 
@@ -55,14 +61,17 @@ function removeRule(idx: number) {
   const newRules = [...(props.modelValue ?? [])]
   newRules.splice(idx, 1)
   ruleTexts.value.splice(idx, 1)
+  selfUpdate = true
   emit('update:modelValue', newRules)
 }
 
 function onTextInput(idx: number, text: string) {
-  ruleTexts.value[idx] = text
+  ruleTexts.value[idx] = text  // 保留原始文本（含换行/空行），textarea 正常换行
   if (props.modelValue && props.modelValue[idx]) {
     const newRules = [...props.modelValue]
+    // 出参仍做 trim + 去空行（配置只要干净值），但不回灌 textarea
     newRules[idx] = { ...newRules[idx], values: text.split('\n').map(s => s.trim()).filter(Boolean) }
+    selfUpdate = true
     emit('update:modelValue', newRules)
   }
 }

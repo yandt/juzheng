@@ -5,6 +5,7 @@ import { useSbox } from '../composables/useSbox'
 import { usePrefs } from '../composables/usePrefs'
 import { t } from '../i18n'
 import { DNS_REJECT, type DnsMatchType } from '../configModel'
+import { removeDnsServer } from '../configOps'
 
 const { config, sboxRunning, configDirty, saving, markDirty } = useSbox()
 // 界面偏好（语言/主题）——纯前端偏好，localStorage 持久化，即选即生效，不进 sing-box 配置。
@@ -47,7 +48,12 @@ const activeSettingsTab = ref('general')
 // 即改即存
 function onInput() { markDirty() }
 function addDns() { s.value.dnsServers.push({ address: '', detour: 'direct', tag: genDnsTag() }); markDirty() }
-function removeDns(i: number) { s.value.dnsServers.splice(i, 1); markDirty() }
+function removeDns(i: number) {
+  // 集中清引用：删 DNS 服务器前，先级联清除 dnsRules/dnsFinal/dnsRawRules 里对它的引用（configOps）。
+  const tag = s.value.dnsServers[i]?.tag
+  if (tag) removeDnsServer(config.value, tag)
+  s.value.dnsServers.splice(i, 1); markDirty()
+}
 
 // DNS 分流规则增删与排序（顺序=优先级）
 function addDnsRule() {

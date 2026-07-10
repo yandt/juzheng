@@ -510,6 +510,8 @@ export function serializeConfig(cfg: SingBoxConfig): string {
   for (const sr of (cfg.rules ?? [])) {
     // clash_mode 规则由下方按 settings.clashMode 统一生成，跳过旧的避免重复。
     if (sr.raw && sr.raw.clash_mode !== undefined) continue
+    // mixed-back 回注兜底规则由下方统一注入到【用户规则之后】，这里跳过旧的，避免它排在最前把回注流量短路。
+    if (sr.raw && Array.isArray(sr.raw.inbound) && sr.raw.inbound.includes('mixed-back')) continue
     const cloned = JSON.parse(JSON.stringify(sr.raw))
     if (sr.outbound === MITM_NODE_TAG && cfg.mitmRules) {
       for (const mt of ['domain_suffix', 'domain_keyword', 'domain', 'domain_regex', 'ip_cidr', 'geosite', 'geoip', 'protocol']) {
@@ -529,38 +531,67 @@ export function serializeConfig(cfg: SingBoxConfig): string {
   }
 
   // 2. 用户规则：严格按 orderedRules 顺序输出（顺序 = 优先级），排在系统规则之后。
-  //    合并「连续的」同出口 + 同匹配类型条目为一条（values 数组），既保序又不冗余。
-  let cur: { outbound: string; matchType: RuleMatchType; values: string[] } | null = null
-  const flushCur = () => {
-    if (!cur || cur.values.length === 0) { cur = null; return }
-    const rule: Record<string, any> = { outbound: cur.outbound }
-    rule[cur.matchType] = cur.values
-    newRules.push(rule)
-    cur = null
-  }
+  //    平铺 —— 每条 orderedRule 独立输出一条 route 规则（不按出口/类型合并打包）。
+  //    这样序列化是纯 1:1 确定性映射：规则页看到什么、配置就是什么，无合并变形、稳定可预测。
   for (const r of (cfg.orderedRules ?? [])) {
     const val = (r.value ?? '').trim()
     if (!val) continue
-    if (cur && cur.outbound === r.outbound && cur.matchType === r.matchType) {
-      if (!cur.values.includes(val)) cur.values.push(val)
-    } else {
-      flushCur()
-      cur = { outbound: r.outbound, matchType: r.matchType, values: [val] }
-    }
+    const rule: Record<string, any> = { outbound: r.outbound }
+    rule[r.matchType] = [val]
+    newRules.push(rule)
   }
-  flushCur()
+
+  // 系统骨架保证（MITM 链路必需，缺则注入）——无论导入什么格式、怎么编辑都成立：
+  // 1) sniff 必须在最前：嗅探 TUN 加密流量的 SNI/Host，否则按域名匹配的规则（含抓包域名→to-mitmproxy）永远命不中。
+  if (!newRules.some(r => r.action === 'sniff')) {
+    newRules.unshift({ action: 'sniff' })
+  }
+
+  // 主代理出口解析：骨架里的 Global / mixed-back 回环出口必须指向【配置里真实存在的出口】，
+  //   否则 sing-box 启动校验 "outbound 不存在" 会直接拒绝启动 → 端口全不监听 → 完全不通。
+  //   模板里叫 proxy-node，但真实订阅的主组多为 selector 代理组（如 "🔰 节点选择"，也是 route.final）。
+  //   优先级：存在 proxy-node → route.final → 第一个代理组(selector/urltest) → 第一个真实节点 → 兜底 proxy-node。
+  const outList: any[] = Array.isArray(obj.outbounds) ? obj.outbounds : []
+  const outTags = new Set(outList.map((o: any) => o?.tag).filter(Boolean))
+  const resolveMainProxyOut = (): string => {
+    if (outTags.has(PROXY_OUT)) return PROXY_OUT
+    const finalTag = obj.route?.final
+    if (typeof finalTag === 'string' && outTags.has(finalTag)) return finalTag
+    const grp = outList.find((o: any) => o?.type === 'selector' || o?.type === 'urltest')
+    if (grp?.tag) return grp.tag
+    const real = outList.find((o: any) => o?.tag && !['direct', 'block', 'dns'].includes(o?.type) && o.tag !== MITM_NODE_TAG)
+    if (real?.tag) return real.tag
+    return PROXY_OUT
+  }
+  const mainProxyOut = resolveMainProxyOut()
 
   // 代理模式：注入 clash_mode 分流规则（放在 sniff 之后、其余规则之前，优先级最高）。
   //   Direct 模式 → 全部直连；Global 模式 → 全部走主代理出口；Rule 模式两条都不匹配，走下方常规规则。
   const clashModeRules = [
     { clash_mode: 'Direct', outbound: 'direct' },
-    { clash_mode: 'Global', outbound: PROXY_OUT },
+    { clash_mode: 'Global', outbound: mainProxyOut },
   ]
   const insertAt = (newRules[0] && newRules[0].action === 'sniff') ? 1 : 0
   newRules.splice(insertAt, 0, ...clashModeRules)
 
+  // 2) mixed-back 回注兜底规则：go-mitmproxy 解密后回注 sing-box 的流量必须能出网，否则链路断。
+  //    关键：放在【所有用户域名规则之后】当兜底，而不是最前面。
+  //    这样解密回注的流量会先按上方用户域名规则【严格分流】（如 ipdata → AI代理-Anthropic），
+  //    都不匹配时才走此兜底到主代理出口。防回环靠抓包规则的 inbound:tun-in 限定（mixed-back 流量不会再被抓去解密）。
+  //    先移除可能残留的 mixed-back 规则，再统一追加到末尾，保证位置正确。
+  for (let i = newRules.length - 1; i >= 0; i--) {
+    const r = newRules[i]
+    if (Array.isArray(r.inbound) && r.inbound.includes('mixed-back') &&
+        !r.domain && !r.domain_suffix && !r.domain_keyword && !r.domain_regex) {
+      newRules.splice(i, 1)
+    }
+  }
+  newRules.push({ inbound: ['mixed-back'], outbound: mainProxyOut })
+
   // 写回 route.rules，保留 route 顶层其他字段（final/auto_detect_interface 等）
   obj.route = { ...(obj.route || {}) }
+  // 开启进程查找：让 Clash API /connections 能上报每条连接的进程名（连接页用）。
+  obj.route.find_process = true
   if (newRules.length > 0) {
     obj.route.rules = newRules
   } else {

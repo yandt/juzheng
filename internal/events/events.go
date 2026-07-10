@@ -21,6 +21,9 @@ const (
 	// SingboxStarted / SingboxStopped sing-box 内核启停，数据 map[string]any{}。
 	SingboxStarted = "singbox:started"
 	SingboxStopped = "singbox:stopped"
+
+	// MonitorHit 监控规则命中，数据为 mitmcore.MonitorHit（含 flowId/规则/动作/命中字段等）。
+	MonitorHit = "monitor:hit"
 )
 
 // EventEmitter 是事件发射抽象。

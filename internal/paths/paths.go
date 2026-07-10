@@ -54,6 +54,15 @@ func MetaPath() (string, error) {
 	return filepath.Join(d, "meta.json"), nil
 }
 
+// MonitorPath 监控规则文件 ~/.juzheng/monitor.json（内容层监控/拦截/改写/报警规则，全局一份）。
+func MonitorPath() (string, error) {
+	d, err := JuzhengDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(d, "monitor.json"), nil
+}
+
 // SingboxConfigPath 当前活动订阅的运行副本 ~/.juzheng/singbox.json（helper 读这个）。
 func SingboxConfigPath() (string, error) {
 	d, err := JuzhengDir()

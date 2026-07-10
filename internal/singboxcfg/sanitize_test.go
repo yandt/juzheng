@@ -95,6 +95,41 @@ func TestSanitize_DropsGeoRules(t *testing.T) {
 	}
 }
 
+func TestSanitize_InjectsQuicRejectBeforeCapture(t *testing.T) {
+	in := `{
+		"outbounds": [{"type":"direct","tag":"direct"}],
+		"route": {"rules": [
+			{"action":"sniff"},
+			{"inbound":["tun-in"],"domain_keyword":["ipdata"],"outbound":"to-mitmproxy"},
+			{"domain":["other.example"],"outbound":"direct"}
+		]}
+	}`
+	rules := parse(t, Sanitize(in))["route"].(map[string]any)["rules"].([]any)
+	// 抓包规则前应多出一条 QUIC reject（同 inbound + 同域名）
+	if len(rules) != 4 {
+		t.Fatalf("应在抓包规则前注入 1 条 QUIC reject，规则数应为 4，实际 %d", len(rules))
+	}
+	rej := rules[1].(map[string]any)
+	if rej["action"] != "reject" || rej["network"] != "udp" {
+		t.Errorf("注入的规则应为 udp reject，实际 %v", rej)
+	}
+	if kw := rej["domain_keyword"].([]any); kw[0] != "ipdata" {
+		t.Errorf("QUIC reject 域名应与抓包一致，实际 %v", kw)
+	}
+	if ib := rej["inbound"].([]any); ib[0] != "tun-in" {
+		t.Errorf("QUIC reject inbound 应与抓包一致，实际 %v", ib)
+	}
+	// 紧随其后应是抓包规则
+	if rules[2].(map[string]any)["outbound"] != "to-mitmproxy" {
+		t.Errorf("QUIC reject 应紧邻在抓包规则之前")
+	}
+	// 幂等：再 sanitize 一次不应重复注入
+	rules2 := parse(t, Sanitize(Sanitize(in)))["route"].(map[string]any)["rules"].([]any)
+	if len(rules2) != 4 {
+		t.Fatalf("二次 sanitize 不应重复注入，规则数应仍为 4，实际 %d", len(rules2))
+	}
+}
+
 func TestSanitize_FixesUrltestIntervalAndCleansMembers(t *testing.T) {
 	in := `{
 		"outbounds": [
