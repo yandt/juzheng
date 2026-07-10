@@ -21,10 +21,8 @@ import (
 	"log"
 	"net"
 	"os"
-	"os/signal"
 	"strconv"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/sagernet/sing-box"
@@ -50,6 +48,13 @@ type helperState struct {
 
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
+
+	// 提权动作（Windows：--install/--uninstall，由主 app 经 UAC 拉起）。处理完即退出。
+	// macOS 恒为 false（安装走 launchd）。
+	if handleAdminArgs() {
+		return
+	}
+
 	log.Printf("juzheng-helper 启动 (pid=%d, uid=%d)", os.Getpid(), os.Getuid())
 
 	sockPath := iproto.ResolveSocketPath()
@@ -66,25 +71,25 @@ func main() {
 		log.Printf("警告：未设置 %s，socket 不做 UID 限制（仅建议开发环境）", iproto.EnvAllowedUID)
 	}
 
-	if err := os.RemoveAll(sockPath); err != nil {
-		log.Printf("清理旧 socket 警告: %v", err)
-	}
-
-	ln, err := net.Listen("unix", sockPath)
+	// 监听端点：平台相关（unix socket + 权限收紧 / 命名管道 + SDDL），见 transport_*.go。
+	ln, err := listen(sockPath, state.allowedUID)
 	if err != nil {
 		log.Fatalf("监听 %s 失败: %v", sockPath, err)
 	}
-	applySocketPerms(sockPath, state.allowedUID)
-	log.Printf("监听 socket: %s", sockPath)
+	log.Printf("监听端点: %s", sockPath)
 
-	// 信号处理：优雅退出（等待在途连接处理完，再停内核、清理 socket）。
-	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer cancel()
+	// 驱动服务：平台相关（macOS/console 走信号；Windows 走 SCM 服务或 console），见 run_*.go。
+	// 驱动内部调用 serveLoop 接受连接，退出前停内核、清理端点。
+	runServer(state, ln, sockPath)
+}
 
+// serveLoop 循环接受连接直到 ctx 取消；处理完在途连接后停内核、清理端点。
+// 被各平台驱动（run_darwin.go / run_windows.go）复用。
+func (s *helperState) serveLoop(ctx context.Context, ln net.Listener, sockPath string) {
 	var wg sync.WaitGroup
 	go func() {
 		<-ctx.Done()
-		log.Printf("收到退出信号，停止接受新连接")
+		log.Printf("停止接受新连接")
 		ln.Close() // 使 Accept 返回错误，跳出主循环
 	}()
 
@@ -92,7 +97,7 @@ func main() {
 		conn, err := ln.Accept()
 		if err != nil {
 			if ctx.Err() != nil {
-				break // 收到信号导致的 Accept 失败：正常退出
+				break // ctx 取消导致的 Accept 失败：正常退出
 			}
 			log.Printf("accept 错误: %v", err)
 			continue
@@ -100,31 +105,14 @@ func main() {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			state.handle(conn)
+			s.handle(conn)
 		}()
 	}
 
-	wg.Wait()      // 等所有在途连接处理完
-	state.stop()   // 停止内核
+	wg.Wait()    // 等所有在途连接处理完
+	s.stop()     // 停止内核
 	os.Remove(sockPath)
 	log.Printf("juzheng-helper 已优雅退出")
-}
-
-// applySocketPerms 收紧 socket 权限：配置了白名单 UID 时 chown 给它并设为 0600
-// （仅该用户与 root 可连接）；未配置时回退为 0666（开发方便）。
-func applySocketPerms(sockPath string, allowedUID int) {
-	if allowedUID >= 0 {
-		if err := os.Chown(sockPath, allowedUID, -1); err != nil {
-			log.Printf("chown socket 警告: %v", err)
-		}
-		if err := os.Chmod(sockPath, 0o600); err != nil {
-			log.Printf("chmod socket 警告: %v", err)
-		}
-		return
-	}
-	if err := os.Chmod(sockPath, 0o666); err != nil {
-		log.Printf("chmod socket 警告: %v", err)
-	}
 }
 
 // handle 处理一个 IPC 连接：校验调用方 → 读一行 JSON 请求 → 返回一行 JSON 响应。

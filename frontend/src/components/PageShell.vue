@@ -53,7 +53,10 @@ defineProps<{
   gap: 12px;
   flex: 0 0 auto;
   height: var(--titlebar-h, 56px);
-  padding: 0 16px;
+  /* 右内边距为 Windows 无边框窗口右上角的自绘三按钮让位（--titlebar-btn-right：
+     Windows=142px / macOS=0），避免 actions 区被三按钮覆盖导致点击无响应。 */
+  padding-left: 16px;
+  padding-right: calc(16px + var(--titlebar-btn-right, 0px));
   background: var(--jz-surface-2);
   border-bottom: 1px solid var(--jz-border);
   /* 关键：sticky 让 header 在 page-body 滚动时始终可见 */

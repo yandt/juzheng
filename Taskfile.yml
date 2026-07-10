@@ -28,6 +28,12 @@ tasks:
 
   build:helper:
     summary: Builds the privileged helper binary (sing-box TUN daemon) and stages it for embedding
+    # 按目标平台分发：darwin → juzheng-helper(+plist)；windows → juzheng-helper.exe（交叉编译）。
+    cmds:
+      - task: "build:helper:{{.GOOS}}"
+
+  build:helper:darwin:
+    internal: true
     sources:
       - helper/**/*.go
       - configs/singbox-template.json
@@ -37,11 +43,25 @@ tasks:
       - internal/helperclient/helper-assets/juzheng-helper
       - internal/helperclient/helper-assets/com.zhanghui.juzheng.helper.plist
     cmds:
-      # 编译 helper（带 sing-box 全套 build tags）。先清掉占位文件避免 go build 报错。
+      # 编译 macOS helper（带 sing-box 全套 build tags）。
       - rm -f internal/helperclient/helper-assets/juzheng-helper
-      - go build -tags "{{.HELPER_TAGS}}" -ldflags "-checklinkname=0 -X internal/godebug.defaultGODEBUG=multipathtcp=0" -o internal/helperclient/helper-assets/juzheng-helper ./helper/
+      - GOOS=darwin go build -tags "{{.HELPER_TAGS}}" -ldflags "-checklinkname=0 -X internal/godebug.defaultGODEBUG=multipathtcp=0" -o internal/helperclient/helper-assets/juzheng-helper ./helper/
       # 同步 plist 到 embed 源目录
       - cp helper/com.zhanghui.juzheng.helper.plist internal/helperclient/helper-assets/
+    vars:
+      HELPER_TAGS: '{{.HELPER_TAGS | default "singbox,with_gvisor,with_quic,with_dhcp,with_wireguard,with_utls,with_acme,with_clash_api,with_tailscale,with_ccm,with_ocm,badlinkname,tfogo_checklinkname0"}}'
+
+  build:helper:windows:
+    internal: true
+    sources:
+      - helper/**/*.go
+      - configs/singbox-template.json
+      - go.mod
+    generates:
+      - internal/helperclient/helper-assets/juzheng-helper.exe
+    cmds:
+      # 交叉编译 Windows helper.exe（sing-box 全套 tags，CGO 关闭，wintun/wireguard-windows 纯 Go）。
+      - GOOS=windows GOARCH={{.GOARCH | default "amd64"}} CGO_ENABLED=0 go build -tags "{{.HELPER_TAGS}}" -ldflags "-checklinkname=0 -X internal/godebug.defaultGODEBUG=multipathtcp=0" -o internal/helperclient/helper-assets/juzheng-helper.exe ./helper/
     vars:
       HELPER_TAGS: '{{.HELPER_TAGS | default "singbox,with_gvisor,with_quic,with_dhcp,with_wireguard,with_utls,with_acme,with_clash_api,with_tailscale,with_ccm,with_ocm,badlinkname,tfogo_checklinkname0"}}'
 

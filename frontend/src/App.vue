@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { System } from '@wailsio/runtime'
+import { System, Window } from '@wailsio/runtime'
 import AppSidebar from './components/AppSidebar.vue'
 import HomePage from './views/HomePage.vue'
 import SubscriptionsPage from './views/SubscriptionsPage.vue'
 import TrafficMonitor from './views/TrafficMonitor.vue'
+import ConnectionsPage from './views/ConnectionsPage.vue'
 import GroupList from './views/GroupList.vue'
 import RuleList from './views/RuleList.vue'
 import SettingsForm from './views/SettingsForm.vue'
@@ -22,6 +23,7 @@ const pages = computed<MenuItem[]>(() => [
   { key: 'home', label: t('nav.home'), icon: 'HomeFilled' },
   { key: 'subscriptions', label: t('nav.subscriptions'), icon: 'Collection' },
   { key: 'traffic', label: t('nav.traffic'), icon: 'DataLine' },
+  { key: 'connections', label: t('nav.connections'), icon: 'Connection' },
   { key: 'groups', label: t('nav.groups'), icon: 'Share' },
   { key: 'rules', label: t('nav.rules'), icon: 'Filter' },
   { key: 'settings', label: t('nav.settings'), icon: 'Setting' },
@@ -51,6 +53,11 @@ function applyPlatformVars() {
 // 立即执行（setup 阶段，确保首屏渲染就用对平台变量）
 applyPlatformVars()
 onMounted(applyPlatformVars)
+
+// Windows 无边框窗口的自绘控制按钮：最小化 → 任务栏；关闭 → 隐藏到托盘（代理/内核继续运行，
+// 从托盘「显示窗口」唤起，「退出 Juzheng」才真正退出）。最大化不适用（窗口固定尺寸）。
+function winMinimise() { Window.Minimise() }
+function winClose() { Window.Hide() }
 </script>
 
 <template>
@@ -63,9 +70,24 @@ onMounted(applyPlatformVars)
     <el-main class="main-area">
       <!-- 沉浸式标题栏拖拽区：macOS 在左侧（避开左上三按钮），Windows 在右侧（避开右上三按钮） -->
       <div class="titlebar-drag" :class="{ 'drag-left': isMac, 'drag-right': !isMac }"></div>
+
+      <!-- Windows 无边框窗口的自绘控制按钮（右上角，替代被隐藏的系统标题栏三按钮）。
+           最小化 / 最大化(固定尺寸，禁用) / 关闭。macOS 用系统红黄绿按钮，不显示这组。 -->
+      <div v-if="!isMac" class="win-controls">
+        <button class="win-btn" title="最小化" @click="winMinimise">
+          <svg width="10" height="10" viewBox="0 0 10 10"><rect x="0" y="4.5" width="10" height="1" fill="currentColor"/></svg>
+        </button>
+        <button class="win-btn win-disabled" title="窗口尺寸固定，无法最大化" disabled>
+          <svg width="10" height="10" viewBox="0 0 10 10"><rect x="0.5" y="0.5" width="9" height="9" fill="none" stroke="currentColor"/></svg>
+        </button>
+        <button class="win-btn win-close" title="关闭（隐藏到托盘，从托盘退出）" @click="winClose">
+          <svg width="10" height="10" viewBox="0 0 10 10"><path d="M0.5 0.5 L9.5 9.5 M9.5 0.5 L0.5 9.5" stroke="currentColor" stroke-width="1.1"/></svg>
+        </button>
+      </div>
       <HomePage v-show="activePage === 'home'" />
       <SubscriptionsPage v-show="activePage === 'subscriptions'" />
-      <TrafficMonitor v-show="activePage === 'traffic'" />
+      <TrafficMonitor v-show="activePage === 'traffic'" :active="activePage === 'traffic'" />
+      <ConnectionsPage v-if="activePage === 'connections'" />
       <GroupList v-show="activePage === 'groups'" />
       <RuleList v-if="activePage === 'rules'" />
       <SettingsForm v-show="activePage === 'settings'" />
@@ -116,6 +138,33 @@ body { overflow: hidden; }
 .main-area button, .main-area input, .main-area select, .main-area .el-select, .main-area a {
   -webkit-app-region: no-drag;
 }
+
+/* Windows 无边框窗口的自绘控制按钮：右上角，浮在拖拽区之上（z-index 高于 titlebar-drag）。 */
+.win-controls {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: flex;
+  height: var(--titlebar-h, 40px);
+  z-index: 30;
+  -webkit-app-region: no-drag;
+}
+.win-btn {
+  width: 46px;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--jz-text-dim, #b8b8b8);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.win-btn:hover { background: rgba(255, 255, 255, 0.08); color: var(--jz-text, #fff); }
+.win-btn.win-close:hover { background: #e81123; color: #fff; }
+.win-btn.win-disabled { color: rgba(255, 255, 255, 0.18); cursor: default; }
+.win-btn.win-disabled:hover { background: transparent; color: rgba(255, 255, 255, 0.18); }
 
 /* ===== 容器溢出控制（核心原则：任何容器不能超过页面，溢出在内部处理） ===== */
 

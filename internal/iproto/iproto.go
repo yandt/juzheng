@@ -13,7 +13,8 @@ import "os"
 // 集中在 L0，helper 与 client 双端共用，避免此前"helper 支持覆盖、client 写死"的不一致。
 const (
 	EnvSocketPath = "JUZHENG_HELPER_SOCKET" // 覆盖 socket 路径（开发/测试）
-	EnvAllowedUID = "JUZHENG_ALLOWED_UID"   // helper 只接受此 UID（+root）的连接
+	EnvAllowedUID = "JUZHENG_ALLOWED_UID"   // [unix] helper 只接受此 UID（+root）的连接
+	EnvAllowedSID = "JUZHENG_ALLOWED_SID"   // [windows] 命名管道 ACL 只允许此用户 SID（+SYSTEM/Admin）连接
 )
 
 // MaxConfigBytes 是单次 start 请求允许的配置大小上限（防止畸形/恶意超大配置撑爆内存）。
@@ -42,12 +43,12 @@ type IPCResponse struct {
 	PID     int    `json:"pid,omitempty"`     // helper 进程 pid
 }
 
-// SocketPath 是 helper 监听的默认 unix socket 路径。
-// 放 /var/run 需 root（helper 是 root，可写；主 app 经 UID 白名单连接）。
-const SocketPath = "/var/run/juzheng-helper.sock"
+// SocketPath 是 helper 监听的默认端点，平台相关（见 transport_unix.go / transport_windows.go）：
+//   - unix:    /var/run/juzheng-helper.sock（放 /var/run 需 root，helper 是 root 可写）
+//   - windows: \\.\pipe\juzheng-helper（命名管道，ACL 限定安装用户 + SYSTEM）
+// 两端（helper 监听 / client 拨号）都经 ResolveSocketPath 取值，保证一致。
 
-// ResolveSocketPath 返回实际使用的 socket 路径：EnvSocketPath 覆盖优先，否则用默认值。
-// helper（服务端监听）与 client（拨号）都调用它，保证两端一致。
+// ResolveSocketPath 返回实际使用的端点：EnvSocketPath 覆盖优先，否则用平台默认 SocketPath。
 func ResolveSocketPath() string {
 	if p := os.Getenv(EnvSocketPath); p != "" {
 		return p
