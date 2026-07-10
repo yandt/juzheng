@@ -71,6 +71,10 @@ func (s *SingBoxService) Start() (string, error) {
 	}
 	// 内存转换：清理 sing-box 不认的字段（_comment 等），不修改原配置文件。
 	cfg = singboxcfg.Sanitize(cfg)
+	// 平台预检（Windows：启用 TUN 但缺 wintun.dll 时给可操作提示；其它平台 no-op）。
+	if err := preflightStart(cfg); err != nil {
+		return "", err
+	}
 	resp, err := helperclient.Call("start", cfg)
 	if err != nil {
 		return "", fmt.Errorf("连接 helper 失败（是否已安装并运行？）: %w", err)

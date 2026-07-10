@@ -1,21 +1,5 @@
 package main
 
-/*
-#cgo CFLAGS: -x objective-c
-#cgo LDFLAGS: -framework Cocoa
-#import <Cocoa/Cocoa.h>
-
-// setDockIconVisible 运行时切换 Dock 图标：visible!=0 → Regular(显示)，否则 Accessory(隐藏)。
-// Wails v3 未导出运行时切换激活策略的接口，这里直接调 AppKit。
-static void setDockIconVisible(int visible) {
-    dispatch_async(dispatch_get_main_queue(), ^{
-        [NSApp setActivationPolicy:(visible ? NSApplicationActivationPolicyRegular
-                                            : NSApplicationActivationPolicyAccessory)];
-    });
-}
-*/
-import "C"
-
 import (
 	"embed"
 	"log"
@@ -25,23 +9,12 @@ import (
 	"github.com/zhanghui/juzheng/internal/events"
 )
 
-// setDockVisible 运行时显隐 macOS Dock 图标（true=显示/Regular，false=隐藏/Accessory）。
-func setDockVisible(v bool) {
-	if v {
-		C.setDockIconVisible(1)
-	} else {
-		C.setDockIconVisible(0)
-	}
-}
+// setDockVisible 运行时显隐 Dock 图标 —— 平台相关，实现见 dock_darwin.go / dock_other.go。
+// macOS：Regular/Accessory 激活策略切换；其他平台：无 Dock 概念，空实现。
 
-// 托盘图标：idle 为纯黑剪影（macOS Template，自适应深浅），
-// active 为黑剪影 + 帽身绿点（服务运行中，非 Template 固定色）。
-//
-//go:embed build/systray/systray-idle@2x.png
-var trayIdleIcon []byte
-
-//go:embed build/systray/systray-active@2x.png
-var trayActiveIcon []byte
+// 托盘图标与状态切换 updateTrayIcon 平台相关（见 tray_darwin.go / tray_other.go）：
+// macOS 用黑色 Template 剪影（系统自适应深浅）；Windows/Linux 用着色图标（灰=idle/绿=active），
+// 保证深/浅任务栏都清晰可见。
 
 // Wails 用 Go 的 embed 包把前端文件嵌入二进制。
 //
@@ -56,6 +29,7 @@ func init() {
 	application.RegisterEvent[map[string]any](events.ProxyStopped)
 	application.RegisterEvent[map[string]any](events.SingboxStarted)
 	application.RegisterEvent[map[string]any](events.SingboxStopped)
+	application.RegisterEvent[MonitorHit](events.MonitorHit)
 }
 
 func main() {
@@ -127,6 +101,9 @@ func main() {
 		MinHeight:     720,
 		MaxWidth:      1100,
 		MaxHeight:     720,
+		// 无边框：平台相关。Windows 下去掉系统默认标题栏（沉浸式，靠前端顶栏拖拽 +
+		// 托盘控制窗口）；macOS 保持 false —— 用下方 MacWindow 的透明标题栏（仍显示红黄绿按钮）。
+		Frameless: framelessWindow,
 		// 调试：启动时打开 WebKit Inspector（F12 等效）。发布前改 false。
 		OpenInspectorOnStartup: true,
 		DevToolsEnabled:        true,
@@ -161,18 +138,20 @@ func main() {
 		e.Cancel()
 	})
 
-	// 拦截最小化（黄按钮）：隐藏窗口，但保留 Dock 图标（激活策略不变）。
-	// 之后点 Dock 图标（Wails 默认 reopen 处理）或托盘菜单可重新唤起。
+	// 拦截最小化（黄按钮）：macOS 隐藏窗口（靠 Dock/托盘唤起）；Windows/Linux 走系统默认
+	// 最小化到任务栏（hideOnMinimise=false，不拦截）。平台差异见 window_darwin/other.go。
 	win.RegisterHook(wailsevents.Common.WindowMinimise, func(e *application.WindowEvent) {
-		win.Hide()
+		if hideOnMinimise {
+			win.Hide()
+		}
 	})
 
 	// 系统托盘：保留菜单栏图标，关窗后用于唤起窗口、退出 app。
 	// （主入口现在是 Dock，托盘作为辅助。）
 	tray := app.SystemTray.New()
 	tray.SetTooltip("Juzheng — 网络流量监控")
-	// 初始为待机态：纯黑剪影 Template（自适应深浅色菜单栏）。
-	tray.SetTemplateIcon(trayIdleIcon)
+	// 初始为待机态（平台相关图标）。
+	updateTrayIcon(tray, false)
 
 	// 右键菜单。
 	menu := app.NewMenu()
@@ -191,17 +170,11 @@ func main() {
 	// 托盘图标随服务状态切换：任一服务（proxy / singbox）在运行 → 激活态（黑剪影+绿点）；
 	// 全部停止 → 回到待机态（纯黑 Template 剪影）。
 	// 注意：SetTemplateIcon 调用后框架内部 isTemplateIcon 标志会被置 true 且不随 SetIcon 复位，
-	// 所以激活态也走 SetTemplateIcon 传带绿点的图（带彩色的 Template 在 macOS 上会被渲染为
-	// 单色，无法显绿）。为了让绿点生效，这里两态切换都避免依赖 template 的自动上色：
-	// 待机用纯黑（template 行为正常），激活用 SetIcon 切非 template 黑+绿点图。
+	// 任一服务运行 → 激活态，全部停止 → 待机态。图标与切换方式平台相关（见 tray_*.go）。
 	proxyRunning := false
 	singboxRunning := false
 	updateTray := func() {
-		if proxyRunning || singboxRunning {
-			tray.SetIcon(trayActiveIcon)
-		} else {
-			tray.SetTemplateIcon(trayIdleIcon)
-		}
+		updateTrayIcon(tray, proxyRunning || singboxRunning)
 	}
 	app.Event.On(events.ProxyStarted, func(*application.CustomEvent) { proxyRunning = true; updateTray() })
 	app.Event.On(events.ProxyStopped, func(*application.CustomEvent) { proxyRunning = false; updateTray() })

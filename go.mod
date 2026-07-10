@@ -3,6 +3,7 @@ module github.com/zhanghui/juzheng
 go 1.26
 
 require (
+	github.com/Microsoft/go-winio v0.6.2
 	github.com/lqqyt2423/go-mitmproxy v1.9.2
 	github.com/sagernet/sing v0.8.11
 	github.com/sagernet/sing-box v1.13.14

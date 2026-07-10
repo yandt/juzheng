@@ -71,9 +71,12 @@ loadAppInfo()
   margin-top: 28px;
   -webkit-app-region: drag;
 }
-/* Windows/Linux：Logo 行紧贴顶部，无需避让三按钮 */
+/* Windows/Linux：Logo 行紧贴顶部，高度与右侧 page-header 一致（--titlebar-h=56px），
+   使 Logo 行与页面标题栏在同一水平基线上、其下的首个菜单项与 page-body 顶部对齐。 */
 .brand-win {
   margin-top: 0;
+  height: var(--titlebar-h, 56px);
+  flex: 0 0 var(--titlebar-h, 56px);
 }
 /* brand 内交互元素（logo 点击等）取消拖拽，避免误操作 */
 .brand img, .brand span { -webkit-app-region: no-drag; }
