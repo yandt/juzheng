@@ -23,6 +23,8 @@ interface CrudOptions<T> {
   makeDefault: () => T
   /** 保存前校验，返回错误信息字符串（通过则不返回） */
   validate?: (draft: T) => string | void
+  /** 编辑时若 tag 改变（重命名），在写回列表前调用，用于级联更新所有引用 */
+  onRename?: (oldTag: string, newTag: string) => void
   /** 删除前副作用（如清理其他列表的引用），在 splice 之前调用 */
   beforeRemove?: (item: T, index: number) => void
   /** 文案 */
@@ -64,6 +66,10 @@ export function useCrudDialog<T extends { tag?: string }>(opts: CrudOptions<T>) 
       arr.push(draft.value)
       ElMessage.success(messages.added ?? t('msg.added'))
     } else {
+      // 重命名：tag 变了则先级联更新所有引用（groups/rules/dns/final），再写回列表
+      const oldTag = (arr[index.value] as { tag?: string })?.tag
+      const newTag = (draft.value as { tag?: string })?.tag
+      if (opts.onRename && oldTag && newTag && oldTag !== newTag) opts.onRename(oldTag, newTag)
       arr[index.value] = draft.value
       ElMessage.success(messages.updated ?? t('msg.updated'))
     }

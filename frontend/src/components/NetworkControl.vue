@@ -213,13 +213,8 @@ async function toggleHelper() {
       </template>
     </el-dialog>
 
-    <!-- MITM 弹窗 -->
-    <el-dialog v-model="showMitmSettings" :title="t('home.mitmDialogTitle')" width="560px">
-      <el-alert type="info" :closable="false" show-icon style="margin-bottom: 12px">{{ t('home.mitmAlert') }}</el-alert>
-      <RuleEditor v-model="config.mitmRules" tag="to-mitmproxy" @update:model-value="markDirty()" />
-      <div class="set-hint" style="margin-top: 8px">{{ t('home.mitmMatchHint') }}</div>
-      <template #footer><el-button type="primary" @click="showMitmSettings = false">{{ t('home.done') }}</el-button></template>
-    </el-dialog>
+    <!-- 抓包域名配置弹窗（复用组件，流量监控页同款） -->
+    <CaptureDomainsDialog v-model="showMitmSettings" />
   </div>
 </template>
 

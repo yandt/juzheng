@@ -7,6 +7,7 @@ import { useSbox } from '../composables/useSbox'
 import { useSubscriptions } from '../composables/useSubscriptions'
 import { useClashApi } from '../composables/useClashApi'
 import { useCrudDialog } from '../composables/ui/useCrudDialog'
+import { renameOutbound, removeOutbound } from '../configOps'
 import { t } from '../i18n'
 import type { SingBoxNode, SelectorGroup } from '../configModel'
 
@@ -48,14 +49,9 @@ const nodeCrud = useCrudDialog<SingBoxNode>({
   list: () => config.value.nodes,
   makeDefault: () => ({ type: 'vmess', tag: `node-${config.value.nodes.length + 1}`, server: '', server_port: 443, rules: [] }),
   validate: (d) => { if (!d.tag) return t('groups.errNodeTag') },
-  beforeRemove: (item) => {
-    // 从所有代理组清理引用
-    for (const g of (config.value.groups ?? [])) {
-      const idx = g.outbounds.indexOf(item.tag)
-      if (idx >= 0) g.outbounds.splice(idx, 1)
-      if (g.default === item.tag) g.default = g.outbounds[0] ?? ''
-    }
-  },
+  // 改名/删除都走集中的 configOps：级联更新/清除 groups、规则、DNS detour、route.final 里的全部引用。
+  onRename: (oldTag, newTag) => renameOutbound(config.value, oldTag, newTag),
+  beforeRemove: (item) => removeOutbound(config.value, item.tag),
   messages: { added: t('groups.nodeAdded'), updated: t('groups.nodeUpdated'), confirmRemove: (n) => t('groups.confirmRemoveNode', { tag: n.tag }) },
 })
 
@@ -67,6 +63,9 @@ const groupCrud = useCrudDialog<SelectorGroup>({
     if (!d.tag) return t('groups.errGroupTag')
     if (d.outbounds.length === 0) return t('groups.errOutbounds')
   },
+  // 代理组改名/删除同样走集中的 configOps（组会被其它组、规则、route.final 引用）。
+  onRename: (oldTag, newTag) => renameOutbound(config.value, oldTag, newTag),
+  beforeRemove: (g) => removeOutbound(config.value, g.tag),
   messages: { added: t('groups.groupAdded'), updated: t('groups.groupUpdated'), confirmRemove: (g) => t('groups.confirmRemoveGroup', { tag: g.tag }) },
 })
 const defaultOptions = computed(() => groupCrud.draft.value.outbounds)

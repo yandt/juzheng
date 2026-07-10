@@ -41,6 +41,12 @@ var commentKeys = []string{"_comment"}
 // geoRuleKeys 是 sing-box 1.12 删除内置 geo 数据库后需整条丢弃的 route rule 字段。
 var geoRuleKeys = []string{"geosite", "geoip"}
 
+// mitmCaptureOutbound 是明文抓包的解密出口 tag（命中它的规则 = 抓包规则）。
+const mitmCaptureOutbound = "to-mitmproxy"
+
+// domainMatchKeys 域名类匹配器键（注入 QUIC reject 规则时从抓包规则原样复制，保持范围一致）。
+var domainMatchKeys = []string{"domain", "domain_suffix", "domain_keyword", "domain_regex"}
+
 // RegisterSpecialOutbound 注册一个特殊 outbound 类型 → action 映射（供扩展/测试）。
 func RegisterSpecialOutbound(so SpecialOutbound) { specialOutbounds = append(specialOutbounds, so) }
 
@@ -178,6 +184,8 @@ func Sanitize(cfgStr string) string {
 				route["final"] = "direct"
 			}
 		}
+		// 8. 明文抓包链路：为每条抓包(→to-mitmproxy)规则注入一条同域名的 QUIC(UDP) reject 规则。
+		injectQuicReject(route)
 	}
 
 	out, err := json.MarshalIndent(obj, "", "  ")
@@ -185,6 +193,53 @@ func Sanitize(cfgStr string) string {
 		return cfgStr
 	}
 	return string(out)
+}
+
+// injectQuicReject 在每条"抓包(outbound=to-mitmproxy)"规则前插入一条 QUIC(UDP) reject 规则，
+// 域名匹配器与抓包规则完全一致。
+//
+// 原因：明文抓包靠 go-mitmproxy 的 HTTP CONNECT(TCP) 解密，而 HTTP/3 走 QUIC(UDP)，
+// HTTP 代理拦不到。若不拒掉，命中抓包域名的 HTTP/3 流量会绕过解密（漏抓）。
+// 拒掉这些域名的 UDP 后，浏览器/应用会自动降级到可被解密的 TCP TLS，从而不漏。
+// 幂等：已存在紧邻的同款 reject（action=reject+network=udp）则跳过，避免重复启动累积。
+func injectQuicReject(route map[string]any) {
+	rules, ok := route["rules"].([]any)
+	if !ok {
+		return
+	}
+	out := make([]any, 0, len(rules)+2)
+	for _, r := range rules {
+		rm, ok := r.(map[string]any)
+		if ok {
+			if ob, _ := rm["outbound"].(string); ob == mitmCaptureOutbound && hasAnyKey(rm, domainMatchKeys) && !quicRejectAlreadyBefore(out) {
+				reject := map[string]any{"action": "reject", "network": "udp"}
+				if inbound, ok := rm["inbound"]; ok {
+					reject["inbound"] = inbound
+				}
+				for _, k := range domainMatchKeys {
+					if v, ok := rm[k]; ok {
+						reject[k] = v
+					}
+				}
+				out = append(out, reject)
+			}
+		}
+		out = append(out, r)
+	}
+	route["rules"] = out
+}
+
+// quicRejectAlreadyBefore 报告已构建切片的末尾是否已是一条 QUIC reject 规则（幂等保护）。
+func quicRejectAlreadyBefore(out []any) bool {
+	if len(out) == 0 {
+		return false
+	}
+	if m, ok := out[len(out)-1].(map[string]any); ok {
+		act, _ := m["action"].(string)
+		net, _ := m["network"].(string)
+		return act == "reject" && net == "udp"
+	}
+	return false
 }
 
 // fixIntervalField 把 interval 数字（秒）转为 sing-box 要求的字符串 "<n>s"。

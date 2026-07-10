@@ -9,3 +9,6 @@ package main
 import "github.com/zhanghui/juzheng/internal/mitmcore"
 
 type FlowUpdate = mitmcore.FlowUpdate
+
+// MonitorHit 监控规则命中事件负载（供前端强类型订阅 monitor:hit）。
+type MonitorHit = mitmcore.MonitorHit

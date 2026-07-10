@@ -12,6 +12,7 @@ export {}
 declare module 'vue' {
   export interface GlobalComponents {
     AppSidebar: typeof import('./components/AppSidebar.vue')['default']
+    CaptureDomainsDialog: typeof import('./components/CaptureDomainsDialog.vue')['default']
     ElAlert: typeof import('element-plus/es')['ElAlert']
     ElAside: typeof import('element-plus/es')['ElAside']
     ElButton: typeof import('element-plus/es')['ElButton']
@@ -39,6 +40,8 @@ declare module 'vue' {
     ElRadioGroup: typeof import('element-plus/es')['ElRadioGroup']
     ElSelect: typeof import('element-plus/es')['ElSelect']
     ElSwitch: typeof import('element-plus/es')['ElSwitch']
+    ElTable: typeof import('element-plus/es')['ElTable']
+    ElTableColumn: typeof import('element-plus/es')['ElTableColumn']
     ElTabPane: typeof import('element-plus/es')['ElTabPane']
     ElTabs: typeof import('element-plus/es')['ElTabs']
     ElTag: typeof import('element-plus/es')['ElTag']
@@ -47,6 +50,7 @@ declare module 'vue' {
     FormDialog: typeof import('./components/FormDialog.vue')['default']
     GroupCollapseItem: typeof import('./components/GroupCollapseItem.vue')['default']
     IconButton: typeof import('./components/IconButton.vue')['default']
+    MonitorRulesDialog: typeof import('./components/MonitorRulesDialog.vue')['default']
     NetworkControl: typeof import('./components/NetworkControl.vue')['default']
     NodeCard: typeof import('./components/NodeCard.vue')['default']
     NodeForm: typeof import('./components/NodeForm.vue')['default']

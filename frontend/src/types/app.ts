@@ -4,7 +4,7 @@
 // 后端生成的类型仍在 bindings/.../models.ts，本文件只放前端独有。
 
 /** 侧栏页面 key 联合类型（App.vue 的 activePage 用）。 */
-export type Page = 'home' | 'subscriptions' | 'traffic' | 'groups' | 'rules' | 'settings' | 'source'
+export type Page = 'home' | 'subscriptions' | 'traffic' | 'connections' | 'groups' | 'rules' | 'settings' | 'source'
 
 /** 侧栏菜单项定义。 */
 export interface MenuItem {

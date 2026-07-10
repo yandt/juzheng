@@ -2,12 +2,19 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"log"
+	"os"
+	"path/filepath"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/zhanghui/juzheng/internal/events"
 	"github.com/zhanghui/juzheng/internal/mitmcore"
+	"github.com/zhanghui/juzheng/internal/paths"
 )
+
+// MonitorRule 别名转发到 internal/mitmcore（保持 Wails binding 兼容）。
+type MonitorRule = mitmcore.MonitorRule
 
 // proxy_service.go 已迁移至 internal/mitmcore（L1 系统层）。
 //
@@ -31,6 +38,54 @@ type CertStatus = mitmcore.CertStatus
 // ServiceStartup 由 Wails 在应用启动时调用。
 func (s *MitmProxyService) ServiceStartup(ctx context.Context, options application.ServiceOptions) error {
 	// core 已在 NewMitmProxyService 构造时创建；不自动启动代理，等前端调用 Start()。
+	// 加载已保存的监控规则到引擎（代理启动后即生效）。
+	s.core.SetMonitorRules(loadMonitorRules())
+	return nil
+}
+
+// loadMonitorRules 从 ~/.juzheng/monitor.json 读取监控规则（不存在/损坏则返回空）。
+func loadMonitorRules() []MonitorRule {
+	p, err := paths.MonitorPath()
+	if err != nil {
+		return nil
+	}
+	data, err := os.ReadFile(p)
+	if err != nil {
+		return nil
+	}
+	var rules []MonitorRule
+	if json.Unmarshal(data, &rules) != nil {
+		return nil
+	}
+	return rules
+}
+
+// GetMonitorRules 返回已保存的监控规则。
+func (s *MitmProxyService) GetMonitorRules() []MonitorRule {
+	rules := loadMonitorRules()
+	if rules == nil {
+		return []MonitorRule{}
+	}
+	return rules
+}
+
+// SetMonitorRules 保存监控规则并热更新到运行中的引擎（即时生效，无需重启代理）。
+func (s *MitmProxyService) SetMonitorRules(rules []MonitorRule) error {
+	p, err := paths.MonitorPath()
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		return err
+	}
+	data, err := json.MarshalIndent(rules, "", "  ")
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(p, data, 0o644); err != nil {
+		return err
+	}
+	s.core.SetMonitorRules(rules)
 	return nil
 }
 
@@ -64,6 +119,11 @@ func (s *MitmProxyService) IsRunning() bool {
 // Start 启动代理，返回监听地址。
 func (s *MitmProxyService) Start() (string, error) {
 	return s.core.Start()
+}
+
+// GetFlows 返回当前已抓流量（供前端打开「流量监控」时补拉，弥补漏收的实时 flow:update 事件）。
+func (s *MitmProxyService) GetFlows() []CapturedFlow {
+	return s.core.Flows()
 }
 
 // Stop 停止代理。

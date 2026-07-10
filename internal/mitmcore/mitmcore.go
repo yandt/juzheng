@@ -18,7 +18,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sync"
 	"time"
@@ -110,6 +109,9 @@ type Proxy struct {
 	proxy   *proxy.Proxy
 	running bool
 	cancel  context.CancelFunc
+
+	monitor *monitorEngine // 内容层监控规则引擎（运行中可热更新）
+	capture *captureAddon  // 流量捕获 addon（持引用以便前端补拉已抓流量）
 }
 
 // New 创建代理控制器。emitter 用于上抛 flow:update / proxy:started/stopped 事件。
@@ -120,7 +122,24 @@ func New(emitter events.EventEmitter) *Proxy {
 	return &Proxy{
 		emitter: emitter,
 		options: DefaultOptions(),
+		monitor: newMonitorEngine(),
 	}
+}
+
+// SetMonitorRules 热更新内容层监控规则（运行中即时生效，无需重启代理）。
+func (p *Proxy) SetMonitorRules(rules []MonitorRule) {
+	p.monitor.SetRules(rules)
+}
+
+// Flows 返回当前已抓流量（供前端打开页面时补拉，弥补漏收的实时事件）。
+func (p *Proxy) Flows() []CapturedFlow {
+	p.mu.Lock()
+	c := p.capture
+	p.mu.Unlock()
+	if c == nil {
+		return []CapturedFlow{}
+	}
+	return c.List()
 }
 
 // SetEmitter 运行时替换事件发射器（用于 service 注入 app 后回调）。
@@ -190,12 +209,16 @@ func (p *Proxy) Start() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("创建代理失败: %w", err)
 	}
-	pr.AddAddon(&captureAddon{emitter: emitter})
+	capture := &captureAddon{emitter: emitter}
+	pr.AddAddon(capture)
+	// 监控 addon 挂在捕获之后：先记录原始流量，再评估监控规则并执行动作。
+	pr.AddAddon(&monitorAddon{engine: p.monitor, emitter: emitter})
 
 	ctx, cancel := context.WithCancel(context.Background())
 
 	p.mu.Lock()
 	p.proxy = pr
+	p.capture = capture
 	p.running = true
 	p.cancel = cancel
 	addr := opts.Addr
@@ -265,34 +288,19 @@ func (p *Proxy) GetCertStatus() CertStatus {
 	if cert, err := x509.ParseCertificate(data); err == nil {
 		st.Fingerprint = fmt.Sprintf("%X", sha256sum(cert.Raw))
 	}
-	st.InstallCmd = fmt.Sprintf(`sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain "%s"`, path)
+	st.InstallCmd = certInstallCmd(path) // 平台相关：见 cert_darwin.go / cert_windows.go
 	st.Trusted = isCertTrusted(path)
 	return st
 }
 
-// InstallCert 信任 CA 证书。
-// 优先用 osascript 提权执行 security add-trusted-cert（系统弹密码框）。
-// 如果 osascript 方式失败（部分 macOS 版本的 SecurityAgent 限制），
-// 降级为用 open 打开 .cer 文件，让用户在钥匙串应用里手动信任。
+// InstallCert 将 CA 证书装入系统信任存储（平台相关，见 cert_darwin.go / cert_windows.go）。
+// 证书需先由代理生成（首次 Start 后）。
 func (p *Proxy) InstallCert() (string, error) {
 	path := p.CaCertPath()
 	if _, err := os.Stat(path); err != nil {
 		return "", fmt.Errorf("证书尚未生成，请先启动一次代理: %w", err)
 	}
-
-	// 方式 1：osascript 提权 add-trusted-cert
-	script := fmt.Sprintf(`do shell script "security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain \"%s\"" with administrator privileges`, path)
-	out, err := exec.Command("osascript", "-e", script).CombinedOutput()
-	if err == nil {
-		return string(out), nil
-	}
-
-	// 方式 2：降级 —— open 打开证书文件，用户手动在钥匙串里点"始终信任"
-	openErr := exec.Command("open", path).Run()
-	if openErr != nil {
-		return string(out), fmt.Errorf("证书安装失败，请手动双击证书文件信任: %s: %w", path, err)
-	}
-	return "已打开证书文件，请在钥匙串访问中双击该证书 → 信任 → 始终信任", nil
+	return installCertTrust(path)
 }
 
 func sha256sum(data []byte) []byte {
@@ -300,11 +308,11 @@ func sha256sum(data []byte) []byte {
 	return h[:]
 }
 
-func isCertTrusted(path string) bool {
-	return exec.Command("security", "verify-cert", "-c", path).Run() == nil
-}
-
 // ===== captureAddon（流量捕获，通过 EventEmitter 上抛）=====
+
+// defaultMaxFlows 后端保留的已抓流量上限（超出淘汰最旧），防止长时间抓包无限增长。
+// 与前端 useMitm 的 MAX_FLOWS 对齐。
+const defaultMaxFlows = 1000
 
 type captureAddon struct {
 	proxy.BaseAddon
@@ -312,12 +320,27 @@ type captureAddon struct {
 
 	mu    sync.Mutex
 	flows map[string]*CapturedFlow
+	order []string // 按到达顺序记录 flow id，用于上限淘汰 + 有序返回（供前端补拉）
+	max   int      // flows 上限，<=0 用 defaultMaxFlows
 }
 
 func (a *captureAddon) ensureMap() {
 	if a.flows == nil {
 		a.flows = make(map[string]*CapturedFlow)
 	}
+}
+
+// List 返回已抓流量（按到达顺序，旧→新）。供前端打开页面时补拉，避免漏掉实时事件的流量。
+func (a *captureAddon) List() []CapturedFlow {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	out := make([]CapturedFlow, 0, len(a.order))
+	for _, id := range a.order {
+		if cf, ok := a.flows[id]; ok {
+			out = append(out, *cf)
+		}
+	}
+	return out
 }
 
 func headerToMap(h http.Header) map[string]string {
@@ -353,6 +376,16 @@ func (a *captureAddon) Request(f *proxy.Flow) {
 		cf.ReqBody = string(f.Request.Body)
 	}
 	a.flows[cf.ID] = cf
+	a.order = append(a.order, cf.ID)
+	max := a.max
+	if max <= 0 {
+		max = defaultMaxFlows
+	}
+	for len(a.order) > max { // 环形淘汰最旧，与前端上限对齐
+		old := a.order[0]
+		a.order = a.order[1:]
+		delete(a.flows, old)
+	}
 	a.mu.Unlock()
 
 	a.emitter.Emit(events.FlowUpdate, FlowUpdate{ID: cf.ID, Type: "request", Flow: cf})
