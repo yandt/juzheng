@@ -10,8 +10,10 @@ poc/juzheng-poc
 # 运行时生成的 CA 证书目录
 **/ca/mitmproxy-ca-cert.*
 
-# helper 构建产物（59MB 二进制，由 task build:helper 生成，勿提交）
-helper-assets/juzheng-helper
+# helper 构建产物（mac 59MB / win 63MB 二进制，由 task build:helper 生成，勿提交）
+# 注：全新克隆后需先跑 `task build:helper`（或 `task build`）生成，裸 go build 才能 go:embed。
+internal/helperclient/helper-assets/juzheng-helper
+internal/helperclient/helper-assets/juzheng-helper.exe
 
 # Wails 自动生成的绑定（由 wails3 generate bindings 产出）
 frontend/bindings/
