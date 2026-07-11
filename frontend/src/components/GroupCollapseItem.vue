@@ -16,6 +16,8 @@ const props = defineProps<{
   filterText: string
   /** 节点延迟 map */
   delays: Record<string, number>
+  /** 正在测速的节点 map（tag → true），测速中在延迟位置显示等待 */
+  testing: Record<string, boolean>
   /** 节点类型查询函数（tag → type 字符串） */
   memberNodeType: (tag: string) => string
 }>()
@@ -107,7 +109,10 @@ function delayClass(d: number | undefined): string {
           </div>
           <div class="member-bottom">
             <span class="node-type" :class="nodeTypeCategory(memberNodeType(memberTag))">{{ memberNodeType(memberTag) }}</span>
-            <span v-if="delays[memberTag] !== undefined" class="member-delay" :class="delayClass(delays[memberTag])">
+            <span v-if="testing[memberTag]" class="member-delay testing">
+              <el-icon class="is-loading"><Loading /></el-icon>{{ t('comp.testing') }}
+            </span>
+            <span v-else-if="delays[memberTag] !== undefined" class="member-delay" :class="delayClass(delays[memberTag])">
               {{ delays[memberTag] > 0 ? `${delays[memberTag]}ms` : t('comp.timeout') }}
             </span>
           </div>
@@ -148,6 +153,7 @@ function delayClass(d: number | undefined): string {
 .member-tag { font-size: 12px; color: var(--el-text-color-regular); font-family: monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .member-bottom { display: flex; align-items: center; justify-content: space-between; gap: 4px; }
 .member-delay { font-size: 11px; font-family: monospace; }
+.member-delay.testing { display: inline-flex; align-items: center; gap: 3px; color: var(--jz-text-dim); }
 .member-delay.good { color: #4ade80; }
 .member-delay.ok { color: #fbbf24; }
 .member-delay.slow { color: #fb923c; }

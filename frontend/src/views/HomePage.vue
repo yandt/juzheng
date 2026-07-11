@@ -4,6 +4,7 @@ import { Setting } from '@element-plus/icons-vue'
 import { useSubscriptions, formatBytes, usagePercent, formatExpire, daysUntilExpire } from '../composables/useSubscriptions'
 import { useMeta, CARD_DEFS } from '../composables/useMeta'
 import { useClashApi } from '../composables/useClashApi'
+import { useTrafficStats } from '../composables/useTrafficStats'
 import { useSbox } from '../composables/useSbox'
 import { useMitm } from '../composables/useMitm'
 import { t } from '../i18n'
@@ -25,7 +26,16 @@ function onCardDrop(to: number) {
   arr.forEach((c, idx) => { c.order = idx })   // c 为 meta.cards 中对象的引用，直接改 order
   saveMeta()
 }
-const { proxyGroups, delays, selectNode, testDelay, startPolling, stopPolling } = useClashApi()
+const { proxyGroups, delays, testing, selectNode, testDelay, startPolling, stopPolling } = useClashApi()
+
+// 节点下拉 label：测速中显示等待文案，否则显示延迟（ms/超时）。
+function nodeLabel(node: string): string {
+  if (testing.value[node]) return `${node} (${t('home.testing')}…)`
+  const d = delays.value[node]
+  if (d === undefined) return node
+  return `${node} (${d > 0 ? `${d}ms` : t('home.timeout')})`
+}
+const { start: startStats, stop: stopStats } = useTrafficStats()
 // 网络设置/代理模式的开关与配置已抽到 NetworkControl / ProxyModeControl 组件，首页只保留链路总览、代理组、流量所需的状态。
 const { sboxRunning, helperStatus, config, markDirty } = useSbox()
 const { running: mitmRunning } = useMitm()
@@ -81,14 +91,14 @@ const activeSubObj = computed(() => subscriptions.value.find(s => s.name === act
 
 onMounted(async () => {
   await Promise.all([refreshSubscriptions(), loadMeta()])
-  if (sboxRunning.value) startPolling()
+  if (sboxRunning.value) { startPolling(); startStats() }
 })
-onUnmounted(() => stopPolling())
+onUnmounted(() => { stopPolling(); stopStats() })
 
 // sing-box 运行状态变化时启停轮询
 watch(sboxRunning, (running) => {
-  if (running) startPolling()
-  else stopPolling()
+  if (running) { startPolling(); startStats() }
+  else { stopPolling(); stopStats() }
 })
 </script>
 
@@ -128,6 +138,7 @@ watch(sboxRunning, (running) => {
         v-for="card in visibleCards"
         :key="card.key"
         class="home-card"
+        :class="{ span2: card.key === 'traffic' }"
         shadow="hover"
       >
         <template #header>
@@ -210,11 +221,11 @@ watch(sboxRunning, (running) => {
                 <el-option
                   v-for="node in selectedGroup.all"
                   :key="node"
-                  :label="node + (delays[node] !== undefined ? (delays[node] > 0 ? ` (${delays[node]}ms)` : ` (${t('home.timeout')})`) : '')"
+                  :label="nodeLabel(node)"
                   :value="node"
                 />
               </el-select>
-              <el-button text size="small" :disabled="!sboxRunning" @click="testDelay(selectedGroup.now)"><el-icon><Timer /></el-icon></el-button>
+              <el-button text size="small" :disabled="!sboxRunning" :loading="!!testing[selectedGroup.now]" @click="testDelay(selectedGroup.now)"><el-icon v-if="!testing[selectedGroup.now]"><Timer /></el-icon></el-button>
             </div>
             <div v-if="!sboxRunning" class="picker-hint">{{ t('home.groupsOfflineHint') }}</div>
           </div>
@@ -225,13 +236,9 @@ watch(sboxRunning, (running) => {
           <NetworkControl />
         </div>
 
-        <!-- 流量统计卡片 -->
+        <!-- 流量统计卡片（跨 2 列，图表 + 指标） -->
         <div v-else-if="card.key === 'traffic'" class="card-body">
-          <el-empty v-if="!sboxRunning" :description="t('home.trafficNeedCore')" :image-size="40" />
-          <div v-else class="traffic-info">
-            <div class="info-row"><span>{{ t('home.proxyGroups') }}</span><b>{{ proxyGroups.length }}</b></div>
-            <div class="info-row"><span>{{ t('home.status') }}</span><b style="color:#4ade80">{{ t('home.running') }}</b></div>
-          </div>
+          <HomeTrafficStats />
         </div>
       </el-card>
 
@@ -243,10 +250,12 @@ watch(sboxRunning, (running) => {
 
 <style scoped>
 .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; }
+/* 流量统计卡片跨 2 列（单列布局时自动收窄为 1 列，不溢出） */
+.home-card.span2 { grid-column: span 2; }
 .home-card :deep(.el-card__header) { padding: 10px 14px; }
 .home-card :deep(.el-card__body) { padding: 14px; }
 .card-header { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.card-title { display: flex; align-items: center; gap: 6px; flex: 1; font-weight: 600; color: var(--jz-text); font-size: 14px; }
+.card-title { display: flex; align-items: center; gap: 6px; flex: 1; flex-shrink: 0; white-space: nowrap; font-weight: 600; color: var(--jz-text); font-size: 14px; }
 .move-btn { padding: 4px; }
 .card-body { display: flex; flex-direction: column; gap: 10px; }
 .sub-name-row { display: flex; align-items: center; gap: 6px; color: var(--jz-text); }
@@ -282,7 +291,6 @@ watch(sboxRunning, (running) => {
 .header-chain .chain-dot { width: 6px; height: 6px; }
 .header-chain .chain-text { white-space: normal; }
 .ctrl-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.traffic-info { display: flex; flex-direction: column; gap: 4px; }
 /* 卡片管理触发按钮：正方形图标钮，风格同 IconButton（但无嵌套 tooltip） */
 .manage-trigger { width: 36px; height: 36px; padding: 0; border: 1px solid transparent; }
 .manage-trigger:hover { border-color: var(--jz-border-hover); background: var(--el-fill-color); }

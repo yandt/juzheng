@@ -14,6 +14,7 @@ import (
 	"sync"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
+	"github.com/zhanghui/juzheng/internal/appinfo"
 	"github.com/zhanghui/juzheng/internal/events"
 	"github.com/zhanghui/juzheng/internal/helperclient"
 	"github.com/zhanghui/juzheng/internal/singboxcfg"
@@ -38,7 +39,16 @@ func (s *SingBoxService) ServiceStartup(ctx context.Context, options application
 }
 
 // ServiceShutdown 由 Wails 在应用退出时调用。
+//
+// 内核跑在独立的特权 helper 进程里（与 app 进程解耦）。生产退出时主动停内核，避免残留。
+// 但调试模式（wails3 dev，见 Taskfile 注入 WAILS_DEV=1）下改 Go 代码会频繁重编重启 app，
+// 若每次退出都停内核，TUN 会被反复关停/重建导致全局网络波动。因此调试时跳过停内核：
+// helper 里的内核继续运行，app 重启后经 helper status 无缝接管（IsRunning 仍为 true）。
 func (s *SingBoxService) ServiceShutdown() error {
+	if appinfo.Get().IsDev {
+		log.Printf("调试模式退出：跳过停内核，保留 helper 中的内核继续运行（避免网络波动）")
+		return nil
+	}
 	return s.Stop()
 }
 

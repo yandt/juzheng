@@ -167,10 +167,9 @@ func main() {
 	})
 	tray.SetMenu(menu)
 
-	// 托盘图标随服务状态切换：任一服务（proxy / singbox）在运行 → 激活态（黑剪影+绿点）；
-	// 全部停止 → 回到待机态（纯黑 Template 剪影）。
-	// 注意：SetTemplateIcon 调用后框架内部 isTemplateIcon 标志会被置 true 且不随 SetIcon 复位，
-	// 任一服务运行 → 激活态，全部停止 → 待机态。图标与切换方式平台相关（见 tray_*.go）。
+	// 托盘图标随服务状态切换：任一服务（proxy / singbox）在运行 → 激活态；全部停止 → 待机态。
+	// 图标与切换方式平台相关（见 tray_*.go）。macOS 用单色 Template、靠剪影形状区分
+	// （运行=完整戴帽/待机=去帽翅），Windows/Linux 用着色图（灰/绿）。
 	proxyRunning := false
 	singboxRunning := false
 	updateTray := func() {

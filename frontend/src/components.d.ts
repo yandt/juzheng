@@ -49,6 +49,7 @@ declare module 'vue' {
     FilterInput: typeof import('./components/FilterInput.vue')['default']
     FormDialog: typeof import('./components/FormDialog.vue')['default']
     GroupCollapseItem: typeof import('./components/GroupCollapseItem.vue')['default']
+    HomeTrafficStats: typeof import('./components/HomeTrafficStats.vue')['default']
     IconButton: typeof import('./components/IconButton.vue')['default']
     MonitorRulesDialog: typeof import('./components/MonitorRulesDialog.vue')['default']
     NetworkControl: typeof import('./components/NetworkControl.vue')['default']
@@ -60,5 +61,6 @@ declare module 'vue' {
     SaveButton: typeof import('./components/SaveButton.vue')['default']
     SaveStatus: typeof import('./components/SaveStatus.vue')['default']
     SvgIcon: typeof import('./components/SvgIcon.vue')['default']
+    TrafficChart: typeof import('./components/TrafficChart.vue')['default']
   }
 }

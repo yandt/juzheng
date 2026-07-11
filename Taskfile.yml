@@ -77,6 +77,10 @@ tasks:
 
   dev:
     summary: Runs the application in development mode
+    # WAILS_DEV=1：让运行时 isDevBuild() 可靠识别调试模式（wails3 dev 默认不设此变量）。
+    # 调试重启 app 时据此跳过停内核（见 singbox_service.go ServiceShutdown），避免 TUN 反复重建致网络波动。
+    env:
+      WAILS_DEV: "1"
     cmds:
       - wails3 dev -config ./build/config.yml -port {{.VITE_PORT}}
 

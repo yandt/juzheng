@@ -16,6 +16,7 @@ export const zh = {
   'comp.editGroup': '编辑代理组',
   'comp.filterNodesPlaceholder': '过滤节点...',
   'comp.timeout': '超时',
+  'comp.testing': '测试中',
   'comp.noMatchNodes': '无匹配节点',
   // NodeCard
   'comp.dragSort': '拖拽排序',
@@ -67,6 +68,7 @@ export const en: typeof zh = {
   'comp.editGroup': 'Edit group',
   'comp.filterNodesPlaceholder': 'Filter nodes...',
   'comp.timeout': 'Timeout',
+  'comp.testing': 'Testing',
   'comp.noMatchNodes': 'No matching nodes',
   // NodeCard
   'comp.dragSort': 'Drag to sort',

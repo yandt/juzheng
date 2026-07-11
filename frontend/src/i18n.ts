@@ -13,6 +13,7 @@ import { zh as componentsZh, en as componentsEn } from './locales/components'
 import { zh as messagesZh, en as messagesEn } from './locales/messages'
 import { zh as monitorZh, en as monitorEn } from './locales/monitor'
 import { zh as connZh, en as connEn } from './locales/connections'
+import { zh as statsZh, en as statsEn } from './locales/stats'
 
 export type Lang = 'zh' | 'en'
 
@@ -22,11 +23,11 @@ type Dict = Record<string, string>
 
 const zh: Dict = {
   ...commonZh, ...homeZh, ...subsZh, ...trafficZh, ...groupsZh,
-  ...rulesZh, ...sourceZh, ...componentsZh, ...messagesZh, ...monitorZh, ...connZh,
+  ...rulesZh, ...sourceZh, ...componentsZh, ...messagesZh, ...monitorZh, ...connZh, ...statsZh,
 }
 const en: Dict = {
   ...commonEn, ...homeEn, ...subsEn, ...trafficEn, ...groupsEn,
-  ...rulesEn, ...sourceEn, ...componentsEn, ...messagesEn, ...monitorEn, ...connEn,
+  ...rulesEn, ...sourceEn, ...componentsEn, ...messagesEn, ...monitorEn, ...connEn, ...statsEn,
 }
 
 const messages: Record<Lang, Dict> = { zh, en }

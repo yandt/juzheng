@@ -13,7 +13,7 @@ import type { SingBoxNode, SelectorGroup } from '../configModel'
 
 const { config, sboxRunning, configDirty, saving, markDirty } = useSbox()
 const { activeSubscription } = useSubscriptions()
-const { delays, selectNode, testDelay } = useClashApi()
+const { delays, testing, selectNode, testDelay } = useClashApi()
 
 const activeTab = ref('groups')
 const activeCollapse = ref<string>('')
@@ -125,6 +125,7 @@ function groupsOfNodeCount(tag: string): number {
             :sbox-running="sboxRunning"
             :filter-text="filterText[i] ?? ''"
             :delays="delays"
+            :testing="testing"
             :member-node-type="memberNodeType"
             @update:filter-text="filterText[i] = $event"
             @edit-group="groupCrud.openEdit(i)"

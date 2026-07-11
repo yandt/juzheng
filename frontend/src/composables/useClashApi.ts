@@ -14,6 +14,8 @@ const CLASH_API = 'http://127.0.0.1:9090'
 // 节点延迟（tag → 毫秒，-1=超时/失败）
 const proxyGroups = ref<ProxyGroup[]>([])
 const delays = ref<Record<string, number>>({})
+// 正在测速的节点（tag → true），测速中在延迟位置显示等待状态
+const testing = ref<Record<string, boolean>>({})
 // 当前 Clash 代理模式（Rule/Global/Direct），运行中从 API 同步
 const clashMode = ref('Rule')
 let pollTimer: ReturnType<typeof setInterval> | null = null
@@ -85,8 +87,9 @@ async function selectNode(group: string, node: string) {
   }
 }
 
-// 测速单个节点
+// 测速单个节点。测速期间把该节点标记为 testing，供 UI 在延迟位置显示等待状态。
 async function testDelay(node: string) {
+  testing.value = { ...testing.value, [node]: true }
   try {
     const url = encodeURIComponent('https://www.gstatic.com/generate_204')
     const res = await fetch(`${CLASH_API}/proxies/${encodeURIComponent(node)}/delay?url=${url}&timeout=5000`)
@@ -95,6 +98,10 @@ async function testDelay(node: string) {
     delays.value = { ...delays.value, [node]: d }
   } catch {
     delays.value = { ...delays.value, [node]: -1 }
+  } finally {
+    const next = { ...testing.value }
+    delete next[node]
+    testing.value = next
   }
 }
 
@@ -113,8 +120,9 @@ function stopPolling() {
   }
   proxyGroups.value = []
   delays.value = {}
+  testing.value = {}
 }
 
 export function useClashApi() {
-  return { proxyGroups, delays, clashMode, fetchGroups, fetchMode, selectNode, setMode, testDelay, startPolling, stopPolling }
+  return { proxyGroups, delays, testing, clashMode, fetchGroups, fetchMode, selectNode, setMode, testDelay, startPolling, stopPolling }
 }
