@@ -26,8 +26,9 @@ cd "$(dirname "$0")/.."                 # 仓库根
 export PATH="$HOME/go/bin:$PATH"        # task / wails3 装在这里
 
 # ---------- 常量 ----------
-APP=juzheng
-COMPANY=Juzheng
+APP=juzheng          # 拼音名：exe 文件名 / 安装器文件名 / PROJECTNAME
+COMPANY=Juzheng      # 公司名
+PRODUCT=居正          # 中文产品名：安装器开始菜单/桌面/卸载项显示名
 RELEASE_DIR=bin/release
 WEBVIEW2_URL="https://go.microsoft.com/fwlink/p/?LinkId=2124703"
 WEBVIEW2_EXE=build/windows/nsis/MicrosoftEdgeWebview2Setup.exe
@@ -170,7 +171,7 @@ build_installer() {
   log "构建 Windows/${arch} 安装器…"
   ( cd build/windows/nsis && makensis -V2 \
       -DINFO_PROJECTNAME="$APP" \
-      -DINFO_PRODUCTNAME="$COMPANY" \
+      -DINFO_PRODUCTNAME="$PRODUCT" \
       -DINFO_COMPANYNAME="$COMPANY" \
       -DINFO_PRODUCTVERSION="$VERSION" \
       "-DINFO_COPYRIGHT=(c) $(date +%Y) $COMPANY" \
