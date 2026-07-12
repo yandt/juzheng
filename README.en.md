@@ -22,6 +22,11 @@
 - **Live stats & connections** — homepage traffic chart (filterable by proxy group), connection list (with process names).
 - **System tray** — status icon reflects the kernel's running state; stays resident in the background.
 
+## 📖 Documentation
+
+- [Feature Guide](docs/FEATURES.en.md) — a page-by-page walkthrough of every feature.
+- [User Guide](docs/USER-GUIDE.en.md) — installation, setup, daily use, and FAQ.
+
 ## 🧱 Tech Stack
 
 | Layer | Technology |
