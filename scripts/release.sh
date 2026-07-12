@@ -206,7 +206,7 @@ if [ "$PUBLISH" = 1 ]; then
   local_prev="$(git tag --list 'v*' --sort=-v:refname | grep -vx "$TAG" | head -1 || true)"
   notes="$(mktemp)"
   {
-    echo "矩正 (Juzheng) ${TAG}"
+    echo "居正 (Juzheng) ${TAG}"
     echo
     echo "## 变更"
     if [ -n "$local_prev" ]; then git log --no-merges --pretty='- %s' "${local_prev}..HEAD"; else echo "- 初始发布"; fi
@@ -218,7 +218,7 @@ if [ "$PUBLISH" = 1 ]; then
     echo "- TUN（虚拟网卡）模式需自备对应架构 wintun.dll（见 zip 内 README 或应用内提示）。"
   } > "$notes"
 
-  flags=(--title "矩正 ${TAG}" --notes-file "$notes" --target main)
+  flags=(--title "居正 ${TAG}" --notes-file "$notes" --target main)
   [ "$PRERELEASE" = 1 ] && flags+=(--prerelease)
   log "创建 Release ${TAG}…"
   gh release create "$TAG" "${flags[@]}" "${ASSETS[@]}"
