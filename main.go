@@ -104,8 +104,8 @@ func main() {
 		// 无边框：平台相关。Windows 下去掉系统默认标题栏（沉浸式，靠前端顶栏拖拽 +
 		// 托盘控制窗口）；macOS 保持 false —— 用下方 MacWindow 的透明标题栏（仍显示红黄绿按钮）。
 		Frameless: framelessWindow,
-		// 调试：启动时打开 WebKit Inspector（F12 等效）。发布前改 false。
-		OpenInspectorOnStartup: true,
+		// 调试：启动时打开 WebKit Inspector（F12 等效）。发布版关闭自动弹出，仍保留 DevTools（可手动开）。
+		OpenInspectorOnStartup: false,
 		DevToolsEnabled:        true,
 		Mac: application.MacWindow{
 			InvisibleTitleBarHeight: 38, // 透明标题栏区域高度（可拖拽 + 双击最大化）
