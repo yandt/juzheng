@@ -21,4 +21,10 @@ func (s *AppService) GetAppInfo() AppInfo {
 	return appinfo.Get()
 }
 
+// GetLANAddresses 返回本机可供局域网访问的 IPv4 地址列表（委托 appinfo.LANAddresses）。
+// 供首页「对外代理服务」卡片显示,提示其他设备该把代理指向哪个 IP。
+func (s *AppService) GetLANAddresses() []string {
+	return appinfo.LANAddresses()
+}
+
 func NewAppService() *AppService { return &AppService{} }

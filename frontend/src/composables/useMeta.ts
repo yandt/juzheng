@@ -19,6 +19,7 @@ export const CARD_DEFS: CardDef[] = [
   { key: 'proxy-mode', title: 'home.cardProxyMode', icon: 'Operation' },
   { key: 'proxy-groups', title: 'home.cardProxyGroups', icon: 'Connection' },
   { key: 'quick-toggles', title: 'home.cardNetwork', icon: 'Switch' },
+  { key: 'lan-share', title: 'home.cardLanShare', icon: 'Share' },
   { key: 'traffic', title: 'home.cardTraffic', icon: 'DataLine' },
 ]
 

@@ -16,6 +16,15 @@ interface AppInfo {
 const appInfo = ref<AppInfo>({ appVersion: '', os: '', arch: '', isDev: false })
 let loaded = false
 
+// 本机局域网 IPv4 地址（供「对外代理服务」卡片显示,提示其他设备指向哪个 IP）。
+const lanAddresses = ref<string[]>([])
+
+async function loadLanAddresses() {
+  try {
+    lanAddresses.value = (await app.GetLANAddresses()) ?? []
+  } catch { lanAddresses.value = [] }
+}
+
 async function loadAppInfo() {
   if (loaded) return
   loaded = true
@@ -31,5 +40,5 @@ async function loadAppInfo() {
 }
 
 export function useApp() {
-  return { appInfo, loadAppInfo }
+  return { appInfo, loadAppInfo, lanAddresses, loadLanAddresses }
 }

@@ -20,6 +20,7 @@ The overview and control center.
 - **Chain status**: three dots visualize the "kernel → helper → network" readiness.
 - **Proxy mode toggle**: switch instantly between Rule / Global / Direct, mapped to `clash_api.default_mode` and `clash_mode` routing rules.
 - **Current node**: shows and quickly switches the main proxy group's selected node; supports per-node latency tests (shows "Testing…" while running).
+- **LAN proxy service card**: shows the LAN-sharing (public proxy) status — whether it's serving and whether auth is on — and lists the full addresses other devices can use (this machine's LAN IPs : port, click to copy). When off, it points you to Settings to enable it.
 - **Traffic stats card**: a dual-series area chart (upload/download speed), with time span switchable across **1 / 5 / 10 / 30 / 60 minutes** (default 10), filterable by proxy group. Hover to see the time and up/down speed at a point. Six metrics below: upload speed, download speed, active connections, total upload, total download, kernel memory usage.
 
 ## Subscriptions

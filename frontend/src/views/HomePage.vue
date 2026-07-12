@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, computed, watch, ref } from 'vue'
+import { ElMessage } from 'element-plus'
 import { Setting } from '@element-plus/icons-vue'
 import { useSubscriptions, formatBytes, usagePercent, formatExpire, daysUntilExpire } from '../composables/useSubscriptions'
 import { useMeta, CARD_DEFS } from '../composables/useMeta'
@@ -7,6 +8,7 @@ import { useClashApi } from '../composables/useClashApi'
 import { useTrafficStats } from '../composables/useTrafficStats'
 import { useSbox } from '../composables/useSbox'
 import { useMitm } from '../composables/useMitm'
+import { useApp } from '../composables/service/useApp'
 import { t } from '../i18n'
 
 const { subscriptions, activeSubscription, refreshSubscriptions } = useSubscriptions()
@@ -39,6 +41,19 @@ const { start: startStats, stop: stopStats } = useTrafficStats()
 // 网络设置/代理模式的开关与配置已抽到 NetworkControl / ProxyModeControl 组件，首页只保留链路总览、代理组、流量所需的状态。
 const { sboxRunning, helperStatus, config, markDirty } = useSbox()
 const { running: mitmRunning } = useMitm()
+const { lanAddresses, loadLanAddresses } = useApp()
+
+// 对外代理服务（局域网共享）卡片状态。
+const lanSettings = computed(() => config.value.settings)
+// 服务是否实际就绪：开关开启 且 内核在运行（入站才真正在监听）。
+const lanServing = computed(() => !!lanSettings.value?.lanEnabled && sboxRunning.value)
+// 供其他设备使用的完整代理地址列表（本机各 LAN IP : 端口）。
+const lanEndpoints = computed(() =>
+  lanAddresses.value.map(ip => `${ip}:${lanSettings.value?.lanPort ?? 7890}`))
+const lanHasAuth = computed(() => !!(lanSettings.value?.lanUsername ?? '').trim())
+async function copyLanEndpoint(ep: string) {
+  try { await navigator.clipboard.writeText(ep); ElMessage.success(t('home.lanCopied')) } catch { /* 忽略 */ }
+}
 
 // 代理组卡片：先选代理组，再选该组默认节点（两个联动 select）。
 // 数据源统一：内核运行中用 Clash API 实时数据（now/延迟）；未运行时回退到静态配置
@@ -90,7 +105,7 @@ const cardIcon = (key: string) => CARD_DEFS.find(c => c.key === key)?.icon ?? 'M
 const activeSubObj = computed(() => subscriptions.value.find(s => s.name === activeSubscription.value))
 
 onMounted(async () => {
-  await Promise.all([refreshSubscriptions(), loadMeta()])
+  await Promise.all([refreshSubscriptions(), loadMeta(), loadLanAddresses()])
   if (sboxRunning.value) { startPolling(); startStats() }
 })
 onUnmounted(() => { stopPolling(); stopStats() })
@@ -236,6 +251,41 @@ watch(sboxRunning, (running) => {
           <NetworkControl />
         </div>
 
+        <!-- 对外代理服务卡片（局域网共享状态） -->
+        <div v-else-if="card.key === 'lan-share'" class="card-body">
+          <!-- 未开启：提示去设置开启 -->
+          <template v-if="!lanSettings?.lanEnabled">
+            <div class="lan-off">
+              <el-tag type="info" size="small">{{ t('home.lanDisabled') }}</el-tag>
+              <span class="lan-hint">{{ t('home.lanEnableTip') }}</span>
+            </div>
+          </template>
+          <template v-else>
+            <!-- 服务状态行 -->
+            <div class="lan-status-row">
+              <span class="chain-dot" :class="lanServing ? 'on' : 'off'"></span>
+              <span class="lan-state" :class="lanServing ? 'ok' : 'wait'">
+                {{ lanServing ? t('home.lanServing') : t('home.lanWaiting') }}
+              </span>
+              <el-tag size="small" :type="lanHasAuth ? 'success' : 'warning'" effect="plain">
+                {{ lanHasAuth ? t('home.lanAuthOn') : t('home.lanAuthOff') }}
+              </el-tag>
+            </div>
+            <!-- 服务未就绪时提示需启动内核 -->
+            <div v-if="!lanServing" class="lan-hint">{{ t('home.lanNeedKernel') }}</div>
+            <!-- 供其他设备使用的地址（点击复制） -->
+            <div class="lan-endpoints">
+              <div class="lan-endpoints-label">{{ t('home.lanEndpoints') }}</div>
+              <el-empty v-if="lanEndpoints.length === 0" :description="t('home.lanNoIp')" :image-size="32" />
+              <div v-for="ep in lanEndpoints" :key="ep" class="lan-ep" @click="copyLanEndpoint(ep)" :title="t('home.lanClickCopy')">
+                <span class="lan-ep-addr">{{ ep }}</span>
+                <el-icon class="lan-ep-copy"><DocumentCopy /></el-icon>
+              </div>
+              <div class="lan-hint">{{ t('home.lanProtoHint') }}</div>
+            </div>
+          </template>
+        </div>
+
         <!-- 流量统计卡片（跨 2 列，图表 + 指标） -->
         <div v-else-if="card.key === 'traffic'" class="card-body">
           <HomeTrafficStats />
@@ -270,6 +320,23 @@ watch(sboxRunning, (running) => {
 .picker-label { font-size: 12px; color: #8ab4f8; min-width: 64px; flex-shrink: 0; }
 .picker-select { flex: 1; }
 .picker-hint { font-size: 11px; color: var(--jz-text-dim); }
+/* 对外代理服务卡片 */
+.lan-off { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.lan-hint { font-size: 11px; color: var(--jz-text-dim); line-height: 1.5; }
+.lan-status-row { display: flex; align-items: center; gap: 8px; }
+.lan-state { font-size: 13px; font-weight: 600; }
+.lan-state.ok { color: #4ade80; }
+.lan-state.wait { color: #fbbf24; }
+.lan-endpoints { display: flex; flex-direction: column; gap: 6px; }
+.lan-endpoints-label { font-size: 12px; color: #8ab4f8; }
+.lan-ep {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 6px 10px; border-radius: 6px; cursor: pointer;
+  background: var(--jz-surface-2); border: 1px solid var(--jz-border);
+}
+.lan-ep:hover { border-color: var(--jz-border-hover); background: var(--el-fill-color); }
+.lan-ep-addr { font-family: monospace; font-size: 13px; color: var(--jz-text); }
+.lan-ep-copy { color: var(--jz-text-dim); font-size: 14px; }
 /* 链路总状态条 */
 .chain-status {
   display: flex; align-items: center; gap: 6px;
