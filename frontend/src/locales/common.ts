@@ -3,9 +3,9 @@ export const zh = {
   // 导航
   'nav.home': '首页',
   'nav.subscriptions': '订阅',
-  'nav.traffic': '流量监控',
+  'nav.traffic': '监控',
   'nav.connections': '连接',
-  'nav.groups': '代理与节点',
+  'nav.groups': '代理',
   'nav.rules': '规则',
   'nav.settings': '设置',
   'nav.source': '源码',

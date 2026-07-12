@@ -22,10 +22,10 @@ const isMac = ref(System.IsMac())
 const pages = computed<MenuItem[]>(() => [
   { key: 'home', label: t('nav.home'), icon: 'HomeFilled' },
   { key: 'subscriptions', label: t('nav.subscriptions'), icon: 'Collection' },
-  { key: 'traffic', label: t('nav.traffic'), icon: 'DataLine' },
-  { key: 'connections', label: t('nav.connections'), icon: 'Connection' },
   { key: 'groups', label: t('nav.groups'), icon: 'Share' },
   { key: 'rules', label: t('nav.rules'), icon: 'Filter' },
+  { key: 'traffic', label: t('nav.traffic'), icon: 'DataLine' },
+  { key: 'connections', label: t('nav.connections'), icon: 'Connection' },
   { key: 'settings', label: t('nav.settings'), icon: 'Setting' },
   { key: 'source', label: t('nav.source'), icon: 'Document' },
 ])
