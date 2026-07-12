@@ -5,7 +5,7 @@ import type {
   SingBoxConfig, SingBoxNode, SelectorGroup, SingBoxRule, OrderedRule,
   GroupRule, SingBoxSettings, DnsServer, RuleMatchType, DnsMatchType,
 } from './types'
-import { DNS_REJECT, PROXY_OUT, SYSTEM_NODE_TAGS, MITM_NODE_TAG } from './types'
+import { DNS_REJECT, PROXY_OUT, SYSTEM_NODE_TAGS, MITM_NODE_TAG, LAN_INBOUND_TAG } from './types'
 
 // 已图形化的字段集合（解析时不放进 raw，序列化时从结构化取）。
 const GRAPHICAL_KEYS = new Set(['type', 'tag', 'server', 'server_port'])
@@ -123,7 +123,8 @@ export function parseConfig(jsonStr: string): SingBoxConfig | null {
   const settings: SingBoxSettings = {
     tunEnabled: false, tunAddress: '', tunMtu: 1500, tunStack: 'system',
     tunInterfaceName: '', tunAutoRoute: true, tunStrictRoute: true,
-    mixedBackPort: 9788, logLevel: 'info', dnsServers: [], dnsStrategy: '',
+    mixedBackPort: 9788, lanEnabled: false, lanPort: 7890, lanUsername: '', lanPassword: '',
+    logLevel: 'info', dnsServers: [], dnsStrategy: '',
     dnsRules: [], dnsFinal: '', dnsRawRules: [], clashMode: 'Rule',
   }
   if (Array.isArray(obj.inbounds)) {
@@ -138,6 +139,13 @@ export function parseConfig(jsonStr: string): SingBoxConfig | null {
         settings.tunStrictRoute = ib.strict_route ?? true
       } else if (ib.tag === 'mixed-back' && ib.type === 'mixed') {
         settings.mixedBackPort = ib.listen_port ?? 9788
+      } else if (ib.tag === LAN_INBOUND_TAG && ib.type === 'mixed') {
+        // 局域网共享入站(绑 0.0.0.0)。存在即视为已开启。
+        settings.lanEnabled = true
+        settings.lanPort = ib.listen_port ?? 7890
+        const u = Array.isArray(ib.users) ? ib.users[0] : undefined
+        settings.lanUsername = u?.username ?? ''
+        settings.lanPassword = u?.password ?? ''
       }
     }
   }
@@ -218,23 +226,40 @@ export function serializeConfig(cfg: SingBoxConfig): string {
 
   // inbounds：修改 mixed-back 端口、TUN 设置（基于 raw 里的 inbound 结构改字段）
   if (Array.isArray(obj.inbounds)) {
-    obj.inbounds = obj.inbounds.map((ib: any) => {
-      if (ib.type === 'tun') {
-        return {
-          ...ib,
-          address: cfg.settings.tunAddress ? [cfg.settings.tunAddress] : ib.address,
-          mtu: cfg.settings.tunMtu,
-          stack: cfg.settings.tunStack,
-          interface_name: cfg.settings.tunInterfaceName || undefined,
-          auto_route: cfg.settings.tunAutoRoute,
-          strict_route: cfg.settings.tunStrictRoute,
+    obj.inbounds = obj.inbounds
+      // 先移除既有的局域网共享入站,稍后按开关状态统一重建（避免残留/重复）。
+      .filter((ib: any) => ib?.tag !== LAN_INBOUND_TAG)
+      .map((ib: any) => {
+        if (ib.type === 'tun') {
+          return {
+            ...ib,
+            address: cfg.settings.tunAddress ? [cfg.settings.tunAddress] : ib.address,
+            mtu: cfg.settings.tunMtu,
+            stack: cfg.settings.tunStack,
+            interface_name: cfg.settings.tunInterfaceName || undefined,
+            auto_route: cfg.settings.tunAutoRoute,
+            strict_route: cfg.settings.tunStrictRoute,
+          }
         }
+        if (ib.tag === 'mixed-back' && ib.type === 'mixed') {
+          return { ...ib, listen_port: cfg.settings.mixedBackPort }
+        }
+        return ib
+      })
+    // 局域网共享开启：追加绑 0.0.0.0 的混合(HTTP+SOCKS)入站,供同网段其他设备使用。
+    if (cfg.settings.lanEnabled) {
+      const lanIn: Record<string, any> = {
+        type: 'mixed',
+        tag: LAN_INBOUND_TAG,
+        listen: '0.0.0.0',
+        listen_port: cfg.settings.lanPort || 7890,
       }
-      if (ib.tag === 'mixed-back' && ib.type === 'mixed') {
-        return { ...ib, listen_port: cfg.settings.mixedBackPort }
+      // 可选鉴权：填了用户名才启用（否则任意设备免密可用）。
+      if ((cfg.settings.lanUsername ?? '').trim()) {
+        lanIn.users = [{ username: cfg.settings.lanUsername.trim(), password: cfg.settings.lanPassword ?? '' }]
       }
-      return ib
-    })
+      obj.inbounds.push(lanIn)
+    }
   }
 
   // log level
@@ -308,8 +333,10 @@ export function serializeConfig(cfg: SingBoxConfig): string {
   for (const sr of (cfg.rules ?? [])) {
     // clash_mode 规则由下方按 settings.clashMode 统一生成，跳过旧的避免重复。
     if (sr.raw && sr.raw.clash_mode !== undefined) continue
-    // mixed-back 回注兜底规则由下方统一注入到【用户规则之后】，这里跳过旧的，避免它排在最前把回注流量短路。
-    if (sr.raw && Array.isArray(sr.raw.inbound) && sr.raw.inbound.includes('mixed-back')) continue
+    // mixed-back 回注 / lan-in 局域网入站的兜底规则由下方统一注入到【用户规则之后】，
+    // 这里跳过旧的，避免它排在最前把这些流量短路。
+    if (sr.raw && Array.isArray(sr.raw.inbound) &&
+        (sr.raw.inbound.includes('mixed-back') || sr.raw.inbound.includes(LAN_INBOUND_TAG))) continue
     const cloned = JSON.parse(JSON.stringify(sr.raw))
     if (sr.outbound === MITM_NODE_TAG && cfg.mitmRules) {
       for (const mt of ['domain_suffix', 'domain_keyword', 'domain', 'domain_regex', 'ip_cidr', 'geosite', 'geoip', 'protocol']) {
@@ -379,12 +406,17 @@ export function serializeConfig(cfg: SingBoxConfig): string {
   //    先移除可能残留的 mixed-back 规则，再统一追加到末尾，保证位置正确。
   for (let i = newRules.length - 1; i >= 0; i--) {
     const r = newRules[i]
-    if (Array.isArray(r.inbound) && r.inbound.includes('mixed-back') &&
+    if (Array.isArray(r.inbound) && (r.inbound.includes('mixed-back') || r.inbound.includes(LAN_INBOUND_TAG)) &&
         !r.domain && !r.domain_suffix && !r.domain_keyword && !r.domain_regex) {
       newRules.splice(i, 1)
     }
   }
   newRules.push({ inbound: ['mixed-back'], outbound: mainProxyOut })
+  // 局域网共享开启：其入站流量未命中上方用户规则时,兜底走主代理出口(而非直连),
+  // 使 LAN 设备默认经代理出网。命中用户域名规则的仍按规则分流。
+  if (cfg.settings.lanEnabled) {
+    newRules.push({ inbound: [LAN_INBOUND_TAG], outbound: mainProxyOut })
+  }
 
   // 写回 route.rules，保留 route 顶层其他字段（final/auto_detect_interface 等）
   obj.route = { ...(obj.route || {}) }
@@ -416,5 +448,5 @@ function stripComments(o: any): void {
 
 // 空配置（初始化用）。
 export function blankConfig(): SingBoxConfig {
-  return { nodes: [], systemNodes: [], groups: [], orderedRules: [], rules: [], mitmRules: [], settings: { tunEnabled: false, tunAddress: '', tunMtu: 1500, tunStack: 'system', tunInterfaceName: '', tunAutoRoute: true, tunStrictRoute: true, mixedBackPort: 9788, logLevel: 'info', dnsServers: [], dnsStrategy: '', dnsRules: [], dnsFinal: '', dnsRawRules: [], clashMode: 'Rule' }, raw: {} }
+  return { nodes: [], systemNodes: [], groups: [], orderedRules: [], rules: [], mitmRules: [], settings: { tunEnabled: false, tunAddress: '', tunMtu: 1500, tunStack: 'system', tunInterfaceName: '', tunAutoRoute: true, tunStrictRoute: true, mixedBackPort: 9788, lanEnabled: false, lanPort: 7890, lanUsername: '', lanPassword: '', logLevel: 'info', dnsServers: [], dnsStrategy: '', dnsRules: [], dnsFinal: '', dnsRawRules: [], clashMode: 'Rule' }, raw: {} }
 }

@@ -75,6 +75,7 @@ Common items — TUN, DNS, ports, logging.
 - **TUN**: on/off, address, MTU, stack (system/gVisor), interface name, auto route, strict route.
 - **DNS**: multiple DNS servers (address + detour), routing rules (domain → specific DNS), resolution strategy (prefer_ipv4/ipv6, etc.), fallback server.
 - **Ports**: mixed-back re-injection port, etc.
+- **LAN sharing**: when enabled, exposes a mixed (HTTP+SOCKS5, same port) proxy inbound (bound to `0.0.0.0`, default port 7890) for other devices on the same network; optional username/password auth. Other devices point their proxy at "this machine's LAN IP : port" to egress through this machine (main proxy by default; rule-matched traffic follows the rules). Restart the kernel to apply.
 - **Log level**: trace/debug/info/warn/error.
 
 ## Source

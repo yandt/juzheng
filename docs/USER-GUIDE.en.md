@@ -73,6 +73,17 @@ Under **Settings → DNS**:
 - Add routing rules (a class of domains → a specific DNS server);
 - Set the resolution strategy and fallback server.
 
+### LAN sharing (optional)
+
+Turn this machine into a LAN proxy for phones, tablets, and other devices on the same network:
+
+1. Open **Settings → Network & Proxy → LAN Sharing** and enable "Share proxy".
+2. Set the listen port (default `7890`); on public networks, also set a username/password.
+3. Save and **restart the kernel** to apply.
+4. On other devices, set the HTTP/SOCKS5 proxy to "**this machine's LAN IP : port**" (e.g. `192.168.1.10:7890`) to egress through this machine.
+
+> Sharing opens a port to the LAN — use only on trusted networks.
+
 ---
 
 ## 4. Using Traffic Inspection (optional)

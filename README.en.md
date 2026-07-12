@@ -18,6 +18,7 @@
 - **Rule editing** — graphical routing rules (domain / IP / GeoSite / GeoIP …); order = priority.
 - **Proxy modes** — one-tap toggle between Rule / Global / Direct.
 - **DNS configuration** — multiple DNS servers, routing rules, resolution strategy, fallback server.
+- **LAN sharing** — expose an HTTP/SOCKS5 proxy inbound so other devices on the same network egress through this machine (optional auth).
 - **Traffic inspection** — MITM-decrypt HTTPS to view request/response plaintext; supports upstream chained proxy.
 - **Live stats & connections** — homepage traffic chart (filterable by proxy group), connection list (with process names).
 - **System tray** — status icon reflects the kernel's running state; stays resident in the background.

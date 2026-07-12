@@ -99,6 +99,10 @@ export interface SingBoxSettings {
   tunAutoRoute: boolean      // 自动配置路由
   tunStrictRoute: boolean    // 严格路由
   mixedBackPort: number      // mixed-back inbound 端口
+  lanEnabled: boolean        // 局域网共享：对外提供混合(HTTP+SOCKS)代理入站,供同网段其他设备使用
+  lanPort: number            // 局域网共享入站端口(绑 0.0.0.0)
+  lanUsername: string        // 局域网共享鉴权用户名(空=不鉴权)
+  lanPassword: string        // 局域网共享鉴权密码
   logLevel: string
   dnsServers: DnsServer[]    // DNS 服务器列表（地址 + detour）
   dnsStrategy: string        // 解析策略：''(默认)/prefer_ipv4/prefer_ipv6/ipv4_only/ipv6_only
@@ -127,3 +131,6 @@ export const SYSTEM_NODE_TAGS = new Set(['to-mitmproxy', 'direct'])
 
 // MITM 隐身节点 tag（规则自动注入的目标）。
 export const MITM_NODE_TAG = 'to-mitmproxy'
+
+// 局域网共享入站 tag（对外混合代理入站,绑 0.0.0.0,供其他设备使用）。
+export const LAN_INBOUND_TAG = 'lan-in'

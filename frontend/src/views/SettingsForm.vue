@@ -116,6 +116,30 @@ function moveDnsRule(i: number, dir: number) {
       <el-divider content-position="left">{{ t('home.cardProxyMode') }}</el-divider>
       <ProxyModeControl />
       <NetworkControl expanded />
+
+      <!-- 局域网共享：对外提供混合(HTTP+SOCKS)代理入站,供同网段其他设备使用 -->
+      <el-divider content-position="left">{{ t('settings.lanShare') }}</el-divider>
+      <el-form label-width="120px" label-position="right" class="settings-form">
+        <el-form-item :label="t('settings.lanEnable')">
+          <el-switch v-model="s.lanEnabled" @change="onInput" />
+          <span class="hint">{{ t('settings.lanEnableHint') }}</span>
+        </el-form-item>
+        <template v-if="s.lanEnabled">
+          <el-form-item :label="t('settings.lanPort')">
+            <el-input-number v-model="s.lanPort" :min="1" :max="65535" :controls="false" class="lan-port" @change="onInput" />
+            <span class="hint" v-html="t('settings.lanPortHint', { port: s.lanPort })"></span>
+          </el-form-item>
+          <el-form-item :label="t('settings.lanUser')">
+            <el-input v-model="s.lanUsername" size="default" class="set-ctrl" :placeholder="t('settings.lanUserPh')" @input="onInput" />
+          </el-form-item>
+          <el-form-item :label="t('settings.lanPass')">
+            <el-input v-model="s.lanPassword" size="default" type="password" show-password class="set-ctrl" :placeholder="t('settings.lanPassPh')" @input="onInput" />
+          </el-form-item>
+          <el-form-item label="">
+            <el-alert type="warning" :closable="false" show-icon :title="t('settings.lanWarn')" />
+          </el-form-item>
+        </template>
+      </el-form>
     </div>
     </el-tab-pane>
 
@@ -202,6 +226,8 @@ function moveDnsRule(i: number, dir: number) {
 .settings-form, .net-tab { width: 100%; }
 /* 统一：所有设置控件填满「控件列」（标签右侧至容器右缘），右缘对齐，各 tab 一致 */
 .set-ctrl { width: 100%; }
+.lan-port { width: 140px; }
+.lan-port :deep(.el-input__inner) { text-align: left; font-family: monospace; }
 /* 分段控件（主题）铺满控件列，与代理模式等一致 */
 .seg-full { display: flex; width: 100%; }
 .seg-full :deep(.el-radio-button) { flex: 1; }
