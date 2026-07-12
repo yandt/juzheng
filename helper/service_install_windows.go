@@ -50,6 +50,12 @@ func runInstall(allowSID string) error {
 		}
 	}
 
+	// 写入内嵌的 wintun.dll（与 helper 架构匹配）到 helper 同目录，供 sing-box 运行 TUN 时加载。
+	// best-effort：失败不阻断安装，仅影响 TUN 模式，普通代理不受影响。
+	if err := writeWintun(dir); err != nil {
+		log.Printf("写入 wintun.dll 失败（TUN 模式将不可用）: %v", err)
+	}
+
 	m, err := mgr.Connect()
 	if err != nil {
 		return fmt.Errorf("连接服务管理器: %w", err)
@@ -106,6 +112,7 @@ func runUninstall() error {
 		return fmt.Errorf("删除服务: %w", err)
 	}
 	_ = os.Remove(installedExePath())
+	_ = os.Remove(filepath.Join(installDirWin(), "wintun.dll"))
 	log.Printf("helper 服务已卸载")
 	return nil
 }

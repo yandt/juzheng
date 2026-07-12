@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -26,9 +27,10 @@ func preflightStart(cfg string) error {
 	}
 	dir := filepath.Join(programDataDir(), "Juzheng")
 	return fmt.Errorf(
-		"已启用 TUN（虚拟网卡）但缺少 wintun.dll。请从 https://www.wintun.net 下载与本机架构匹配"+
-			"（amd64）的 wintun.dll，放到 %s\\wintun.dll（需管理员），或放入 System32，然后重试。",
-		dir)
+		"已启用 TUN（虚拟网卡）但缺少 wintun.dll。它通常随 helper 自动安装到 %s；"+
+			"若你是旧版本升级而来，请在设置里重新安装 helper 即可。也可手动从 https://www.wintun.net "+
+			"下载 %s 架构的 wintun.dll 放到 %s\\wintun.dll（需管理员）或 System32，然后重试。",
+		dir, runtime.GOARCH, dir)
 }
 
 func programDataDir() string {
