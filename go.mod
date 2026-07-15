@@ -9,6 +9,7 @@ require (
 	github.com/sagernet/sing-box v1.13.14
 	github.com/wailsapp/wails/v3 v3.0.0-alpha2.115
 	golang.org/x/sys v0.46.0
+	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	gopkg.in/yaml.v3 v3.0.1
 )
 

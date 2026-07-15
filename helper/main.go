@@ -51,9 +51,13 @@ func main() {
 
 	// 提权动作（Windows：--install/--uninstall，由主 app 经 UAC 拉起）。处理完即退出。
 	// macOS 恒为 false（安装走 launchd）。
+	// 放在日志轮转之前：安装是一次性短命进程，无需接管日志。
 	if handleAdminArgs() {
 		return
 	}
+
+	// 装配日志轮转。必须早于任何 box.New —— sing-box 在 box.New 时读取 os.Stderr 作为日志出口。
+	setupLogging()
 
 	log.Printf("juzheng-helper 启动 (pid=%d, uid=%d)", os.Getpid(), os.Getuid())
 
