@@ -154,11 +154,21 @@ export function fmtDuration(start: string): string {
 
 // ===== 入口(inbound)解析：区分 TUN(虚拟网卡) / MITM回注 / 系统代理 =====
 // raw = sing-box metadata.type，形如 "tun/tun-in"、"mixed/mixed-back"、"http/xxx"。
-// mixed-back 是 go-mitmproxy 解密后回注 sing-box 的入口，单独标为 mitm。
-export function inboundKind(raw: string): 'tun' | 'mitm' | 'proxy' | '' {
+//
+// 关键：mixed-back 入站身兼两职，不能一律当作 MITM 回注——
+//   1. go-mitmproxy 解密后把流量回注 sing-box（真·MITM回注）；
+//   2. 系统代理的入口（sysproxy 就指向 mixed-back 端口），普通应用直接连进来。
+// 二者在 Clash API 层面完全同形（都是 mixed/mixed-back，源均为 127.0.0.1），
+// 唯一可靠的判别是发起进程：回注由内嵌的 go-mitmproxy 发起，即 app 自身进程(execName)；
+// 系统代理进来的则是真实应用（Chrome、UURemote 等）。
+// selfExec 取自 AppInfo.execName；未知（空）时保守按系统代理处理，避免把用户流量误标成 MITM。
+export function inboundKind(raw: string, proc = '', selfExec = ''): 'tun' | 'mitm' | 'proxy' | '' {
   if (!raw) return ''
   if (raw.split('/')[0].toLowerCase() === 'tun') return 'tun'
-  if (inboundTag(raw) === 'mixed-back') return 'mitm'
+  if (inboundTag(raw) === 'mixed-back') {
+    const isSelf = !!selfExec && !!proc && proc.toLowerCase() === selfExec.toLowerCase()
+    return isSelf ? 'mitm' : 'proxy'
+  }
   return 'proxy'
 }
 // 取入口 tag（"/" 后半段），如 "tun/tun-in" → "tun-in"；无 tag 时返回类型本身。

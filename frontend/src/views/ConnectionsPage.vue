@@ -3,9 +3,13 @@
 import { onMounted, onUnmounted, ref, computed } from 'vue'
 import { Delete, Operation } from '@element-plus/icons-vue'
 import { useConnections, fmtBytes, fmtSpeed, fmtDuration, inboundKind, inboundTag } from '../composables/useConnections'
+import { useApp } from '../composables/service/useApp'
 import { t } from '../i18n'
 
 const { connections, totalDown, totalUp, connected, startPolling, stopPolling, closeAll } = useConnections()
+// execName 用于区分 mixed-back 入口是「MITM回注」(本进程发起)还是「系统代理」(真实应用发起)。
+const { appInfo, loadAppInfo } = useApp()
+loadAppInfo()
 
 onMounted(() => startPolling())
 onUnmounted(() => stopPolling())
@@ -46,8 +50,9 @@ const colLabel = (k: string) => t('conn.' + k)
 type TagType = 'info' | 'primary' | 'success' | 'warning' | 'danger'
 const IN_LABEL: Record<string, string> = { tun: 'conn.viaTun', mitm: 'conn.viaMitm', proxy: 'conn.viaProxy' }
 const IN_TAGTYPE: Record<string, TagType> = { tun: 'primary', mitm: 'success', proxy: 'warning' }
-const inLabel = (raw: string) => { const k = inboundKind(raw); return k ? t(IN_LABEL[k]) : '—' }
-const inTagType = (raw: string): TagType => IN_TAGTYPE[inboundKind(raw)] || 'info'
+// 需要 proc：mixed-back 入口靠发起进程区分 MITM回注 / 系统代理（见 useConnections.inboundKind）。
+const inLabel = (raw: string, proc = '') => { const k = inboundKind(raw, proc, appInfo.value.execName); return k ? t(IN_LABEL[k]) : '—' }
+const inTagType = (raw: string, proc = ''): TagType => IN_TAGTYPE[inboundKind(raw, proc, appInfo.value.execName)] || 'info'
 
 // 列配置拖拽排序
 const dragFrom = ref<number | null>(null)
@@ -114,7 +119,7 @@ function onColDrop(to: number) {
           </el-table-column>
           <el-table-column v-else-if="col.key === 'inbound'" :label="t('conn.inbound')" width="110">
             <template #default="{ row }">
-              <el-tag size="small" :type="inTagType(row.inbound)" effect="plain" :title="inboundTag(row.inbound) || row.inbound">{{ inLabel(row.inbound) }}</el-tag>
+              <el-tag size="small" :type="inTagType(row.inbound, row.proc)" effect="plain" :title="inboundTag(row.inbound) || row.inbound">{{ inLabel(row.inbound, row.proc) }}</el-tag>
             </template>
           </el-table-column>
           <el-table-column v-else-if="col.key === 'type'" :label="t('conn.type')" width="72">
