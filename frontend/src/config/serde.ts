@@ -17,7 +17,7 @@ const GRAPHICAL_KEYS = new Set(['type', 'tag', 'server', 'server_port'])
 const ALL_MATCH_TYPES: RuleMatchType[] = [
   'domain_suffix', 'domain_keyword', 'domain', 'domain_regex',
   'ip_cidr', 'geosite', 'geoip', 'protocol',
-  'process_name', 'process_path',
+  'process_name', 'process_path', 'process_path_regex',
 ]
 
 export function parseConfig(jsonStr: string): SingBoxConfig | null {

@@ -46,7 +46,8 @@
 分流规则的图形化编辑(对应 sing-box `route.rules`)。
 
 - **有序规则**：规则自上而下,**顺序即优先级**,命中即停。
-- **匹配类型**：支持 `domain_suffix`、`domain_keyword`、`domain`、`domain_regex`、`ip_cidr`、`protocol`,以及**按进程分流** `process_name`(可执行文件名,如 `git`、`Telegram`)与 `process_path`(完整路径,如 `/usr/bin/git`)。进程匹配依赖 `route.find_process`,应用已自动开启,无需配置。
+- **匹配类型**：支持 `domain_suffix`、`domain_keyword`、`domain`、`domain_regex`、`ip_cidr`、`protocol`,以及**按进程分流**:`process_name`(可执行文件名精确匹配,如 `git`、`Telegram`)、`process_path`(完整路径精确匹配)、`process_path_regex`(**完整路径正则,支持通配**)。进程匹配依赖 `route.find_process`,应用已自动开启,无需配置。
+- **进程通配**:sing-box 无 `process_name_regex`,要通配请用 `process_path_regex` —— 它对完整路径做正则**搜索**(非全匹配),故一条 `UURemote` 即可覆盖 `UURemote`/`UURemoteServer`/`UURemoteUpdater`。需更精确可锚定,如 `/UURemote[^/]*$`。
 - **出口指定**：每条规则指定出口(代理组 / 节点 / 直连)。
 - **系统规则保真**：MITM 解密、DNS 劫持、回环打破等系统规则原样保留,不被用户规则覆盖。
 - **确定性映射**：规则页所见即配置所得,序列化为 1:1 映射,无隐式合并变形。

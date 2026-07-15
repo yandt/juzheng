@@ -34,12 +34,15 @@ export interface SelectorGroup {
 // 代理组的路由规则（轻量编辑模型）。
 // 一条 GroupRule = 一种匹配类型 + 域名/IP 列表（UI 用 textarea 每行一个）。
 // 序列化时 outbound 自动设为所属组的 tag。
-// process_name/process_path：按发起进程分流（依赖 route.find_process,序列化时已强制开启）。
-// process_name 为可执行文件名（如 curl、Telegram）；process_path 为完整路径（如 /usr/bin/curl）。
+// process_*：按发起进程分流（依赖 route.find_process,序列化时已强制开启）。
+//   process_name       可执行文件名精确匹配（如 curl、Telegram）。大小写敏感,无通配。
+//   process_path       完整路径精确匹配（如 /usr/bin/curl）。
+//   process_path_regex 完整路径正则。sing-box 用 MatchString 实现 —— 是「搜索」而非「全匹配」,
+//                      即路径中含有匹配片段即命中,故 UURemote 一条即可覆盖 UURemote/UURemoteServer/…
 export type RuleMatchType =
   | 'domain_suffix' | 'domain_keyword' | 'domain' | 'domain_regex'
   | 'ip_cidr' | 'geosite' | 'geoip' | 'protocol'
-  | 'process_name' | 'process_path'
+  | 'process_name' | 'process_path' | 'process_path_regex'
 
 export interface GroupRule {
   matchType: RuleMatchType

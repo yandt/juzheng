@@ -26,6 +26,7 @@ const matchTypeOptions = computed<{ value: RuleMatchType; label: string }[]>(() 
   // 按发起进程匹配（依赖 route.find_process,序列化时已强制开启）。
   { value: 'process_name', label: t('comp.matchProcessName') },
   { value: 'process_path', label: t('comp.matchProcessPath') },
+  { value: 'process_path_regex', label: t('comp.matchProcessPathRegex') },
 ])
 
 // textarea 文本镜像（每条规则一个，values.join('\n')）
