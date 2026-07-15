@@ -169,10 +169,10 @@ async function toggleHelper() {
           </el-select>
         </el-form-item>
         <el-form-item :label="t('home.tunInterfaceName')">
-          <el-input v-model="config.settings.tunInterfaceName" :placeholder="t('home.tunInterfacePlaceholder')" @input="markDirty()" />
+          <el-input v-model="config.settings.tunInterfaceName" :placeholder="t('home.tunInterfacePlaceholder')" @change="markDirty()" />
         </el-form-item>
         <el-form-item :label="t('home.tunAddress')">
-          <el-input v-model="config.settings.tunAddress" placeholder="172.18.0.1/30" @input="markDirty()" />
+          <el-input v-model="config.settings.tunAddress" placeholder="172.18.0.1/30" @change="markDirty()" />
         </el-form-item>
         <el-form-item label="MTU">
           <el-input-number v-model="config.settings.tunMtu" :min="576" :max="9000" @change="markDirty()" />

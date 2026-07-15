@@ -1,15 +1,18 @@
 // Package paths 是 juzheng 应用的文件路径中枢（L0 基础设施层）。
 //
 // 集中管理应用数据目录下所有子路径，纯函数、无状态、无外部依赖。
-// 任何模块需要读写应用数据文件，都应通过本包获取路径，避免散落的 os.UserConfigDir() 调用。
+// 任何模块需要读写应用数据文件，都应通过本包获取路径，避免散落的 os.UserHomeDir() 调用。
 //
-// 应用数据根目录遵循各平台规范（os.UserConfigDir + "Juzheng"）：
-//   - macOS   ~/Library/Application Support/Juzheng
-//   - Windows %AppData%\Juzheng（即 C:\Users\<user>\AppData\Roaming\Juzheng）
-//   - Linux   $XDG_CONFIG_HOME/Juzheng（默认 ~/.config/Juzheng）
+// 应用数据根目录为 ~/.juzheng，全平台统一（Windows 即 %USERPROFILE%\.juzheng）：
+// 点目录是开发/网络工具的成熟惯例（~/.ssh、~/.aws、~/.docker、~/.kube），
+// 且路径全平台一致，排查问题时不必记忆三个平台三个位置。
+//
+// 历史：v0.2.85~v0.2.91 曾改用 os.UserConfigDir()/Juzheng（mac ~/Library/Application Support 等），
+// 但该"规范化"收益甚微，反而引入一次性迁移逻辑；其守卫把"新目录已存在"等同于"已迁移"，
+// 被更早期版本遗留的同名残留目录骗过，导致真实配置静默读不到。v0.2.92 起改回并删除迁移代码。
 //
 // 注意：本包只服务于用户态 app 进程。helper（root/SYSTEM）不依赖本包，其配置经 IPC 传入，
-// 绝不能让 helper 走 UserConfigDir（那是特权账户的目录，会读错位置）。
+// 绝不能让 helper 走本包（那会解析到特权账户的 home，读错位置）。
 package paths
 
 import (
@@ -17,25 +20,16 @@ import (
 	"path/filepath"
 )
 
-// dirName 是应用数据目录名（各平台配置根下的子目录）。
-const dirName = "Juzheng"
+// dirName 是应用数据目录名（用户 home 下的点目录）。
+const dirName = ".juzheng"
 
-// JuzhengDir 返回应用根目录（os.UserConfigDir()/Juzheng，不存在不创建，由调用方按需 MkdirAll）。
+// JuzhengDir 返回应用根目录（~/.juzheng，不存在不创建，由调用方按需 MkdirAll）。
 func JuzhengDir() (string, error) {
-	cfg, err := os.UserConfigDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(cfg, dirName), nil
-}
-
-// LegacyJuzhengDir 返回旧版应用根目录 ~/.juzheng（v0.2.84 及更早），仅供一次性数据迁移使用。
-func LegacyJuzhengDir() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, ".juzheng"), nil
+	return filepath.Join(home, dirName), nil
 }
 
 // SchemesDir 多订阅目录 <数据目录>/schemes（物理目录名保留 schemes，避免老数据丢失）。

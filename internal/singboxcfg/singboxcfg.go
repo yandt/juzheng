@@ -13,8 +13,6 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
-	"io"
-	"log"
 	"os"
 	"path/filepath"
 
@@ -197,10 +195,6 @@ func WriteMeta(m AppMeta) error {
 // EnsureDefaults 初始化应用数据目录（首次运行）：schemes 目录、默认订阅、meta.json、singbox.json。
 // 从原 schemes_service.go 的 ensureSubscriptionsAndMeta 下沉至 L1（初始化属于配置层职责，不应在 Wails service 里做）。
 func EnsureDefaults() error {
-	// 一次性迁移旧版 ~/.juzheng 数据到规范数据目录（必须在任何路径读写之前）。
-	if err := migrateLegacyDir(); err != nil {
-		return err
-	}
 	schemesDir, err := paths.SchemesDir()
 	if err != nil {
 		return err
@@ -250,82 +244,3 @@ func EnsureDefaults() error {
 // defaultSubscriptionName 是首次运行创建的默认订阅名。
 const defaultSubscriptionName = "默认订阅"
 
-// migrateLegacyDir 一次性把旧版 ~/.juzheng 的数据迁到新的规范数据目录（os.UserConfigDir/Juzheng）。
-// 仅当新目录尚不存在且旧目录存在时执行：优先整目录 rename（同卷瞬时完成），跨卷等 rename
-// 失败则递归复制且保留旧目录（不删，安全回退）。新目录已存在（新装或已迁移）则跳过。
-func migrateLegacyDir() error {
-	newDir, err := paths.JuzhengDir()
-	if err != nil {
-		return err
-	}
-	if _, err := os.Stat(newDir); err == nil {
-		return nil // 新目录已存在：新装或已迁移，不动
-	}
-	legacy, err := paths.LegacyJuzhengDir()
-	if err != nil {
-		return nil
-	}
-	if fi, err := os.Stat(legacy); err != nil || !fi.IsDir() {
-		return nil // 无旧数据
-	}
-	if err := os.MkdirAll(filepath.Dir(newDir), 0o755); err != nil {
-		return err
-	}
-	if err := os.Rename(legacy, newDir); err == nil {
-		log.Printf("配置目录已迁移: %s → %s", legacy, newDir)
-		return nil
-	}
-	// rename 失败（多为跨卷）：递归复制，保留旧目录作为回退。
-	if err := copyDir(legacy, newDir); err != nil {
-		return fmt.Errorf("迁移配置目录失败: %w", err)
-	}
-	log.Printf("配置目录已复制迁移(旧目录保留): %s → %s", legacy, newDir)
-	return nil
-}
-
-// copyDir 递归复制目录树，保留文件/目录权限。
-func copyDir(src, dst string) error {
-	return filepath.WalkDir(src, func(p string, d os.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-		rel, err := filepath.Rel(src, p)
-		if err != nil {
-			return err
-		}
-		target := filepath.Join(dst, rel)
-		if d.IsDir() {
-			info, err := d.Info()
-			if err != nil {
-				return err
-			}
-			return os.MkdirAll(target, info.Mode().Perm())
-		}
-		return copyFile(p, target)
-	})
-}
-
-// copyFile 复制单个文件，保留源权限。
-func copyFile(src, dst string) error {
-	in, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer in.Close()
-	info, err := in.Stat()
-	if err != nil {
-		return err
-	}
-	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
-		return err
-	}
-	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, info.Mode().Perm())
-	if err != nil {
-		return err
-	}
-	if _, err := io.Copy(out, in); err != nil {
-		out.Close()
-		return err
-	}
-	return out.Close()
-}

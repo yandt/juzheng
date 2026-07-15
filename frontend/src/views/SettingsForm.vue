@@ -130,10 +130,10 @@ function moveDnsRule(i: number, dir: number) {
             <span class="hint" v-html="t('settings.lanPortHint', { port: s.lanPort })"></span>
           </el-form-item>
           <el-form-item :label="t('settings.lanUser')">
-            <el-input v-model="s.lanUsername" size="default" class="set-ctrl" :placeholder="t('settings.lanUserPh')" @input="onInput" />
+            <el-input v-model="s.lanUsername" size="default" class="set-ctrl" :placeholder="t('settings.lanUserPh')" @change="onInput" />
           </el-form-item>
           <el-form-item :label="t('settings.lanPass')">
-            <el-input v-model="s.lanPassword" size="default" type="password" show-password class="set-ctrl" :placeholder="t('settings.lanPassPh')" @input="onInput" />
+            <el-input v-model="s.lanPassword" size="default" type="password" show-password class="set-ctrl" :placeholder="t('settings.lanPassPh')" @change="onInput" />
           </el-form-item>
           <el-form-item label="">
             <el-alert type="warning" :closable="false" show-icon :title="t('settings.lanWarn')" />
@@ -166,7 +166,7 @@ function moveDnsRule(i: number, dir: number) {
               <el-option v-for="o in detourOptions" :key="o.value" :label="o.label" :value="o.value" />
             </el-select>
             <el-input v-model="d.address" size="small" class="dns-addr"
-              placeholder="223.5.5.5 / https://1.1.1.1/dns-query / tls://8.8.8.8" @input="onInput" />
+              placeholder="223.5.5.5 / https://1.1.1.1/dns-query / tls://8.8.8.8" @change="onInput" />
             <el-button text type="danger" size="small" @click="removeDns(i)"><el-icon><Delete /></el-icon></el-button>
           </div>
           <el-button size="small" plain type="primary" @click="addDns"><el-icon><Plus /></el-icon>&nbsp;{{ t('settings.dnsAdd') }}</el-button>
@@ -181,7 +181,7 @@ function moveDnsRule(i: number, dir: number) {
             <el-select v-model="r.matchType" size="small" class="dns-mt" @change="onInput">
               <el-option v-for="m in dnsMatchTypes" :key="m" :label="dnsMatchLabel(m)" :value="m" />
             </el-select>
-            <el-input v-model="r.value" size="small" class="dns-rule-val" :placeholder="t('settings.dnsRuleValuePh')" @input="onInput" />
+            <el-input v-model="r.value" size="small" class="dns-rule-val" :placeholder="t('settings.dnsRuleValuePh')" @change="onInput" />
             <span class="dns-arrow">→</span>
             <el-select v-model="r.server" size="small" class="dns-rule-server" :placeholder="t('settings.dnsUseServer')" @change="onInput">
               <el-option v-for="o in dnsTargetOptions" :key="o.value" :label="o.label" :value="o.value" />
