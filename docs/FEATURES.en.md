@@ -46,7 +46,7 @@ Proxy group and node management.
 Graphical editing of routing rules (sing-box `route.rules`).
 
 - **Ordered rules**: rules apply top-down — **order is priority**, first match wins.
-- **Match types**: `domain_suffix`, `domain_keyword`, `domain`, `domain_regex`, `ip_cidr`, `geosite`, `geoip`, `protocol`.
+- **Match types**: `domain_suffix`, `domain_keyword`, `domain`, `domain_regex`, `ip_cidr`, `protocol`, plus **per-process routing** via `process_name` (executable name, e.g. `git`, `Telegram`) and `process_path` (full path, e.g. `/usr/bin/git`). Process matching relies on `route.find_process`, which the app enables automatically — no configuration needed.
 - **Outbound targeting**: each rule targets an outbound (proxy group / node / direct).
 - **System-rule fidelity**: MITM decryption, DNS hijack, loopback-break and other system rules are preserved verbatim and never overridden by user rules.
 - **Deterministic mapping**: what you see on the Rules page is exactly what the config becomes — a 1:1 serialization with no implicit merging.

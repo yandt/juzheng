@@ -23,6 +23,9 @@ const matchTypeOptions = computed<{ value: RuleMatchType; label: string }[]>(() 
   // 注意：geosite/geoip 在 sing-box 1.12+ 已移除内置数据库，会被 sanitize 整条丢弃 → 规则静默失效（漏抓）。
   // 故不再作为可选匹配类型。按地区分流请改用 rule_set。
   { value: 'protocol', label: t('comp.matchProtocol') },
+  // 按发起进程匹配（依赖 route.find_process,序列化时已强制开启）。
+  { value: 'process_name', label: t('comp.matchProcessName') },
+  { value: 'process_path', label: t('comp.matchProcessPath') },
 ])
 
 // textarea 文本镜像（每条规则一个，values.join('\n')）

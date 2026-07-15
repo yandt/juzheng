@@ -10,6 +10,16 @@ import { DNS_REJECT, PROXY_OUT, SYSTEM_NODE_TAGS, MITM_NODE_TAG, LAN_INBOUND_TAG
 // 已图形化的字段集合（解析时不放进 raw，序列化时从结构化取）。
 const GRAPHICAL_KEYS = new Set(['type', 'tag', 'server', 'server_port'])
 
+// 所有可图形化的路由匹配类型。两处共用,必须保持一致：
+//   - parseConfig：判断一条 route.rule 是否为可分发的用户规则,并展开成 orderedRules；
+//   - serializeConfig：重建 MITM 规则前先清掉旧匹配器。
+// 不在此列表中的匹配器（如 rule_set、inbound 限定）会走系统规则路径,raw 原样保真。
+const ALL_MATCH_TYPES: RuleMatchType[] = [
+  'domain_suffix', 'domain_keyword', 'domain', 'domain_regex',
+  'ip_cidr', 'geosite', 'geoip', 'protocol',
+  'process_name', 'process_path',
+]
+
 export function parseConfig(jsonStr: string): SingBoxConfig | null {
   let obj: any
   try { obj = JSON.parse(jsonStr) } catch { return null }
@@ -60,9 +70,8 @@ export function parseConfig(jsonStr: string): SingBoxConfig | null {
   }
 
   // route.rules → 按 outbound 分发：
-  // outbound 匹配某代理组 tag 的规则 → 拆成 GroupRule 挂到 g.rules
-  // outbound 匹配某用户节点 tag 的规则 → 拆成 GroupRule 挂到 node.rules
-  // 其余规则（指向系统节点出口如 dns-out/direct/to-mitmproxy）→ 留在 cfg.rules（系统规则，raw 保真）
+  // outbound 指向代理组 / 用户节点 / direct(直连) 且带匹配器的规则 → 展开成 orderedRules（规则页可见可编辑）
+  // 其余规则（MITM 的 to-mitmproxy、inbound 限定、clash_mode、sniff 等）→ 留在 cfg.rules（系统规则，raw 保真）
   const rules: SingBoxRule[] = []
   const orderedRules: OrderedRule[] = []
   const mitmRules: GroupRule[] = []
@@ -70,23 +79,30 @@ export function parseConfig(jsonStr: string): SingBoxConfig | null {
   // 组 tag → 组对象的索引
   const groupByTag = new Map<string, SelectorGroup>()
   for (const g of groups) groupByTag.set(g.tag, g)
-  // 用户节点 tag → 节点对象的索引（系统节点不参与，它的规则走系统规则路径保真）
+  // 用户节点 tag → 节点对象的索引
   const nodeByTag = new Map<string, SingBoxNode>()
   for (const n of nodes) nodeByTag.set(n.tag, n)
 
-  // 所有匹配类型字段（用于判断规则是否含可分发的 matchType）
-  const ALL_MATCH_TYPES = ['domain_suffix', 'domain_keyword', 'domain', 'domain_regex', 'ip_cidr', 'geosite', 'geoip', 'protocol'] as RuleMatchType[]
+  // 可作为用户规则出口的 tag 集合 = 代理组 + 用户节点 + direct。
+  // direct 虽是系统隐身节点,但「某域名/某进程走直连」是最常用的规则类型,规则页出口下拉也提供它,
+  // 故必须认作用户规则——否则重新加载后这类规则会从规则页消失,且优先级被提到所有用户规则之前。
+  // to-mitmproxy 例外：MITM 域名规则由 cfg.mitmRules 单独管理,须走系统规则路径保真。
+  const userOutbounds = new Set<string>([...groupByTag.keys(), ...nodeByTag.keys()])
+  for (const n of systemNodes) {
+    if (n.tag !== MITM_NODE_TAG) userOutbounds.add(n.tag)
+  }
 
   if (Array.isArray(routeRules)) {
     for (const r of routeRules) {
       const outbound = r.outbound ?? r.action ?? ''
-      const targetGroup = groupByTag.get(outbound)
-      const targetNode = nodeByTag.get(outbound)
       // 检查规则是否含至少一个 matchType 字段。
-      // 纯 inbound/action 限定规则（如回环打破 inbound:["mixed-back"]）无 matchType，
+      // 纯 action/clash_mode 限定规则（如 sniff、clash_mode 分流）无 matchType，
       // 即使 outbound 匹配组/节点，也走系统规则路径保真，避免规则内容丢失。
       const hasMatchType = ALL_MATCH_TYPES.some(mt => r[mt] !== undefined)
-      if ((targetGroup || targetNode) && hasMatchType) {
+      // inbound 限定规则（如 MITM 的 inbound:["tun-in"]、mixed-back/lan-in 回注兜底）
+      // 无法用 OrderedRule 表达（它只有 值+匹配类型+出口），走系统规则路径保真，避免 inbound 丢失。
+      const hasInbound = r.inbound !== undefined
+      if (userOutbounds.has(outbound) && hasMatchType && !hasInbound) {
         // 用户规则：展开成有序扁平条目，保留 route.rules 的原始顺序（= 匹配优先级）。
         for (const mt of ALL_MATCH_TYPES) {
           const v = r[mt]
@@ -339,7 +355,7 @@ export function serializeConfig(cfg: SingBoxConfig): string {
         (sr.raw.inbound.includes('mixed-back') || sr.raw.inbound.includes(LAN_INBOUND_TAG))) continue
     const cloned = JSON.parse(JSON.stringify(sr.raw))
     if (sr.outbound === MITM_NODE_TAG && cfg.mitmRules) {
-      for (const mt of ['domain_suffix', 'domain_keyword', 'domain', 'domain_regex', 'ip_cidr', 'geosite', 'geoip', 'protocol']) {
+      for (const mt of ALL_MATCH_TYPES) {
         delete cloned[mt]
       }
       const byType = new Map<string, string[]>()

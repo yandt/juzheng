@@ -46,7 +46,7 @@
 分流规则的图形化编辑(对应 sing-box `route.rules`)。
 
 - **有序规则**：规则自上而下,**顺序即优先级**,命中即停。
-- **匹配类型**：支持 `domain_suffix`、`domain_keyword`、`domain`、`domain_regex`、`ip_cidr`、`geosite`、`geoip`、`protocol`。
+- **匹配类型**：支持 `domain_suffix`、`domain_keyword`、`domain`、`domain_regex`、`ip_cidr`、`protocol`,以及**按进程分流** `process_name`(可执行文件名,如 `git`、`Telegram`)与 `process_path`(完整路径,如 `/usr/bin/git`)。进程匹配依赖 `route.find_process`,应用已自动开启,无需配置。
 - **出口指定**：每条规则指定出口(代理组 / 节点 / 直连)。
 - **系统规则保真**：MITM 解密、DNS 劫持、回环打破等系统规则原样保留,不被用户规则覆盖。
 - **确定性映射**：规则页所见即配置所得,序列化为 1:1 映射,无隐式合并变形。

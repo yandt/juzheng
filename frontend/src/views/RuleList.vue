@@ -17,6 +17,9 @@ const matchTypes: { value: RuleMatchType; labelKey: string }[] = [
   { value: 'domain_regex', labelKey: 'rules.matchType.domainRegex' },
   { value: 'ip_cidr', labelKey: 'rules.matchType.ipCidr' },
   { value: 'protocol', labelKey: 'rules.matchType.protocol' },
+  // 按发起进程分流（依赖 route.find_process,序列化时已强制开启）。
+  { value: 'process_name', labelKey: 'rules.matchType.processName' },
+  { value: 'process_path', labelKey: 'rules.matchType.processPath' },
 ]
 const matchTypeLabel = (mt: RuleMatchType) => {
   const found = matchTypes.find(m => m.value === mt)
