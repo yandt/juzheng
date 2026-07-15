@@ -20,6 +20,36 @@ const ALL_MATCH_TYPES: RuleMatchType[] = [
   'process_name', 'process_path', 'process_path_regex',
 ]
 
+// resolveMainProxyOut 解析「主代理出口」的真实 tag。
+// 模板里主代理出口叫 proxy-node，但导入真实订阅后并不存在（主组多为 selector，如 "🔰 节点选择"）。
+// 任何指向 proxy-node 的引用若不校正就是【悬空引用】，后果按引用位置而异：
+//   - route 规则（Global/回环兜底）：sing-box 启动校验失败 → 直接拒绝启动；
+//   - dns.servers[].detour：不报错，但退化成直连去连 DNS 服务器地址 —— 若该地址被墙（如 1.1.1.1），
+//     所有需内部解析的域名全部解析失败，表现为「系统代理入口 + 直连出口」的流量静默全挂。
+// 优先级：proxy-node 存在 → route.final → 第一个代理组 → 第一个真实节点 → 兜底 proxy-node。
+export function resolveMainProxyOut(outbounds: Array<{ tag?: string; type?: string }>, routeFinal?: string): string {
+  const list = Array.isArray(outbounds) ? outbounds : []
+  const tags = new Set(list.map(o => o?.tag).filter(Boolean) as string[])
+  if (tags.has(PROXY_OUT)) return PROXY_OUT
+  if (typeof routeFinal === 'string' && tags.has(routeFinal)) return routeFinal
+  const grp = list.find(o => o?.type === 'selector' || o?.type === 'urltest')
+  if (grp?.tag) return grp.tag
+  const real = list.find(o => o?.tag && !['direct', 'block', 'dns'].includes(o?.type ?? '') && o.tag !== MITM_NODE_TAG)
+  if (real?.tag) return real.tag
+  return PROXY_OUT
+}
+
+// mainProxyOutOf 是 resolveMainProxyOut 的结构化配置入口（供界面用，如 DNS 的「走代理」出口）。
+// 界面绝不能硬编码 proxy-node —— 那正是悬空引用的来源。
+export function mainProxyOutOf(cfg: SingBoxConfig): string {
+  const list: Array<{ tag?: string; type?: string }> = [
+    ...(cfg.systemNodes ?? []).map(n => ({ tag: n.tag, type: n.type })),
+    ...(cfg.nodes ?? []).map(n => ({ tag: n.tag, type: n.type })),
+    ...(cfg.groups ?? []).map(g => ({ tag: g.tag, type: g.type })),
+  ]
+  return resolveMainProxyOut(list, cfg.raw?.route?.final)
+}
+
 export function parseConfig(jsonStr: string): SingBoxConfig | null {
   let obj: any
   try { obj = JSON.parse(jsonStr) } catch { return null }
@@ -240,6 +270,10 @@ export function serializeConfig(cfg: SingBoxConfig): string {
   })
   obj.outbounds = [...systemNodeObs, ...nodeObs, ...groupObs]
 
+  // 出口 tag 集合 + 主代理出口，DNS detour 校验与 route 骨架注入共用（须在写 dns 之前算好）。
+  const outTags = new Set<string>(obj.outbounds.map((o: any) => o?.tag).filter(Boolean))
+  const mainProxyOut = resolveMainProxyOut(obj.outbounds, obj.route?.final)
+
   // inbounds：修改 mixed-back 端口、TUN 设置（基于 raw 里的 inbound 结构改字段）
   if (Array.isArray(obj.inbounds)) {
     obj.inbounds = obj.inbounds
@@ -298,7 +332,12 @@ export function serializeConfig(cfg: SingBoxConfig): string {
       .filter(d => (d.address ?? '').trim())
       .map((d, i) => {
         const srv: Record<string, any> = { tag: d.tag || `dns-${i}`, address: d.address.trim() }
-        if (d.detour) srv.detour = d.detour
+        // detour 必须指向真实存在的出口。悬空的 detour 不会报错，而是让 sing-box 退化成直连去
+        // 连 DNS 服务器地址；若该地址不可达（如被墙的 1.1.1.1），所有需内部解析的域名全部解析
+        // 失败 —— 表现为「系统代理入口 + 直连出口」的流量静默全挂（走代理出口的反而正常，因为
+        // 域名是交给代理服务器解析的）。典型来源：模板占位 proxy-node 在订阅导入后已不存在。
+        // 故此处校正为真实主代理出口，而非原样写回。
+        if (d.detour) srv.detour = outTags.has(d.detour) ? d.detour : mainProxyOut
         return srv
       })
     if (cfg.settings.dnsStrategy) dns.strategy = cfg.settings.dnsStrategy
@@ -388,23 +427,9 @@ export function serializeConfig(cfg: SingBoxConfig): string {
     newRules.unshift({ action: 'sniff' })
   }
 
-  // 主代理出口解析：骨架里的 Global / mixed-back 回环出口必须指向【配置里真实存在的出口】，
-  //   否则 sing-box 启动校验 "outbound 不存在" 会直接拒绝启动 → 端口全不监听 → 完全不通。
-  //   模板里叫 proxy-node，但真实订阅的主组多为 selector 代理组（如 "🔰 节点选择"，也是 route.final）。
-  //   优先级：存在 proxy-node → route.final → 第一个代理组(selector/urltest) → 第一个真实节点 → 兜底 proxy-node。
-  const outList: any[] = Array.isArray(obj.outbounds) ? obj.outbounds : []
-  const outTags = new Set(outList.map((o: any) => o?.tag).filter(Boolean))
-  const resolveMainProxyOut = (): string => {
-    if (outTags.has(PROXY_OUT)) return PROXY_OUT
-    const finalTag = obj.route?.final
-    if (typeof finalTag === 'string' && outTags.has(finalTag)) return finalTag
-    const grp = outList.find((o: any) => o?.type === 'selector' || o?.type === 'urltest')
-    if (grp?.tag) return grp.tag
-    const real = outList.find((o: any) => o?.tag && !['direct', 'block', 'dns'].includes(o?.type) && o.tag !== MITM_NODE_TAG)
-    if (real?.tag) return real.tag
-    return PROXY_OUT
-  }
-  const mainProxyOut = resolveMainProxyOut()
+  // 主代理出口（outTags / mainProxyOut 已在 outbounds 构建后统一算好，DNS detour 校验与此处共用）。
+  // 骨架里的 Global / mixed-back 回环出口必须指向真实存在的出口，否则 sing-box 启动校验
+  // "outbound 不存在" 会直接拒绝启动 → 端口全不监听 → 完全不通。
 
   // 代理模式：注入 clash_mode 分流规则（放在 sniff 之后、其余规则之前，优先级最高）。
   //   Direct 模式 → 全部直连；Global 模式 → 全部走主代理出口；Rule 模式两条都不匹配，走下方常规规则。

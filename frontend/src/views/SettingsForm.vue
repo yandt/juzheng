@@ -4,7 +4,7 @@ import { Plus, Delete, Top, Bottom } from '@element-plus/icons-vue'
 import { useSbox } from '../composables/useSbox'
 import { usePrefs } from '../composables/usePrefs'
 import { t } from '../i18n'
-import { DNS_REJECT, type DnsMatchType } from '../configModel'
+import { DNS_REJECT, mainProxyOutOf, type DnsMatchType } from '../configModel'
 import { removeDnsServer } from '../configOps'
 
 const { config, sboxRunning, configDirty, saving, markDirty } = useSbox()
@@ -15,10 +15,13 @@ const { theme, language } = usePrefs()
 const s = computed(() => config.value.settings)
 
 // detour 可选出口：默认(跟随路由) / 直连 / 走代理 / 各代理组。
+// 「走代理」必须解析成真实主代理出口，绝不能硬编码 proxy-node —— 那是模板占位，导入订阅后
+// 并不存在。悬空的 DNS detour 不报错，而是让 sing-box 退化成直连去连 DNS 地址；地址一旦被墙
+// （如 1.1.1.1），所有需内部解析的域名全挂，表现为「系统代理入口 + 直连出口」流量静默不通。
 const detourOptions = computed(() => [
   { label: t('detour.default'), value: '' },
   { label: t('detour.direct'), value: 'direct' },
-  { label: t('detour.proxy'), value: 'proxy-node' },
+  { label: t('detour.proxy'), value: mainProxyOutOf(config.value) },
   ...(config.value.groups ?? []).map(g => ({ label: t('detour.group', { tag: g.tag }), value: g.tag })),
 ])
 
